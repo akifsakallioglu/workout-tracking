@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Birim testleri · Antrenman Takibi</title>
+  <link rel="icon" href="data:,">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; line-height: 1.5; }
+    ul { padding-left: 0; list-style: none; }
+    .pass, [data-status="pass"] { color: #1a7f37; }
+    .fail, [data-status="fail"] { color: #cf222e; }
+  </style>
+</head>
+<body>
+  <h1>Birim testleri</h1>
+  <p id="summary">Testler çalışıyor…</p>
+  <ul id="results"></ul>
+  <script type="module">
+    import { run } from './harness.js';
+    import './logic.test.js';
+    run();
+  </script>
+</body>
+</html>
