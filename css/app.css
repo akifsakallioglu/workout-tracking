@@ -1,0 +1,259 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --subtle: #f0f3f6;
+  --text: #1b1f24;
+  --muted: #5c6773;
+  --border: #d0d7de;
+  --input-bg: #ffffff;
+  --accent: #0969da;
+  --accent-soft: #ddf4ff;
+  --accent-text: #ffffff;
+  --ok: #1a7f37;
+  --danger: #cf222e;
+  --danger-soft: #ffebe9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216;
+    --surface: #171b21;
+    --subtle: #1e242c;
+    --text: #e6e9ee;
+    --muted: #9aa5b1;
+    --border: #2e3540;
+    --input-bg: #0f1216;
+    --accent: #4c8dff;
+    --accent-soft: rgba(76, 141, 255, 0.16);
+    --accent-text: #0b1220;
+    --ok: #3fb950;
+    --danger: #ff7b72;
+    --danger-soft: rgba(255, 123, 114, 0.12);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.375rem;
+  line-height: 1.25;
+}
+
+.target {
+  margin: 0;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.machines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.machines legend {
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.machine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.machine:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.machine input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.last {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.last.empty {
+  color: var(--muted);
+}
+
+.sets {
+  width: 100%;
+  margin-top: 16px;
+  border-collapse: collapse;
+}
+
+.sets th {
+  padding: 0 8px 6px 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.sets td {
+  padding: 4px 8px 4px 0;
+}
+
+.sets th:first-child,
+.sets td:first-child {
+  width: 3rem;
+  color: var(--muted);
+}
+
+.sets input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.125rem; /* 16px altı iPhone'da odaklanınca ekranı yakınlaştırır */
+  font-variant-numeric: tabular-nums;
+}
+
+.sets input::placeholder {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.sets input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sets input[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.message {
+  margin: 12px 0 0;
+  color: var(--danger);
+}
+
+.message:empty {
+  display: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.button {
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.button.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.button.secondary {
+  border-color: var(--accent);
+  background: transparent;
+  color: var(--accent);
+}
+
+.save-status {
+  color: var(--muted);
+}
+
+.save-status[data-state="saved"] {
+  color: var(--ok);
+}
+
+.save-status[data-state="error"] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--danger);
+}
+
+.loading,
+.fatal {
+  margin: 0;
+  color: var(--muted);
+}
+
+.fatal {
+  color: var(--danger);
+}

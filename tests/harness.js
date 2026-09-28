@@ -36,6 +36,6 @@ export async function run() {
     list.append(item);
   }
   summary.textContent = `${passed}/${tests.length} test geçti`;
-  summary.dataset.status = passed === tests.length ? 'pass' : 'fail';
+  summary.dataset.status = tests.length > 0 && passed === tests.length ? 'pass' : 'fail';
   document.body.dataset.done = 'true';
 }

@@ -34,4 +34,4 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Yeni kararlar bu dosyaya işlenir.
 
 ## Aşamalar
-0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) · 2 Tüm program ve makine ekleme · 3 Otomatik kaydetme ve devam eden antrenman · 4 Yedekleme · 5 PWA ve yayına alma · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
+0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme · 3 Otomatik kaydetme ve devam eden antrenman · 4 Yedekleme · 5 PWA ve yayına alma · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
