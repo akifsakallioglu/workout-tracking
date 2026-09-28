@@ -24,6 +24,14 @@ export function openDatabase() {
   });
 }
 
+export function get(db, storeName, key) {
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(storeName).objectStore(storeName).get(key);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 export function getAll(db, storeName) {
   return new Promise((resolve, reject) => {
     const request = db.transaction(storeName).objectStore(storeName).getAll();

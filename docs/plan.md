@@ -59,15 +59,15 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
   - Kaydı olan makine silinmez, arşivlenir. Arşivlenen makine seçim listesinden kalkar, geçmişte görünmeye devam eder.
 - **Hedef kopyalanır.** Antrenman başlarken hareket adı, makine adı, birim ve hedef kaydın içine kopyalanır. Program sonradan değişse de eski kayıt kendi hedefini gösterir.
 - **Set tanımı:**
-  - Bir set, ağırlığı ve tekrarı girilince sayılır; ağırlıksız makinede tekrar yeter.
-  - Yarım satır için uyarı çıkar, boş satır kaydedilmez.
+  - Ağırlık hareket başına bir kez girilir ve tekrarı girilen her sete uygulanır: 35 kg girildiyse bütün setler 35 kg'dır. Kayıtta her set bu ağırlığı taşır. Ağırlıksız makinede yalnızca tekrar girilir.
+  - Tekrar girilip ağırlık girilmezse uyarı çıkar; boş tekrar kutusu kaydedilmez.
   - Önceki değerler yalnızca soluk ipucudur; siz yazmadıkça hiçbir kutu dolmaz.
 - **"Yapıldı" ve "atlandı":** bitmiş bir antrenmanda en az bir seti girilen hareket "yapıldı" sayılır. Hiç seti girilmeyen hareket "atlandı" sayılır ve kayda yazılmaz. Atlanan hareket "geçen sefer", sayaç ve dönüşüm sırasında hesaba katılmaz. Bitmemiş antrenmanlar da bu hesaplara katılmaz.
 - **Başlangıç makineleri:** her harekete adından tahmin edilen tek bir makine konur.
   - kg birimli olanlar: Dambıl, Kablo, Makine ya da Bar
   - ağırlıksız: Vücut ağırlığı (Ab Wheel Roll-Out ve Hyperextension için)
 
-  Gerçek makinelerinizi uygulamanın içinden eklersiniz.
+  Başka makineleri siz eklersiniz: "+ Makine" ile adı yazar, birimi (kg, kademe ya da ağırlıksız) kendiniz seçersiniz; birim önceden seçili gelmez. Aynı salondaki iki kablo makinesinin ikisi de kg olabilir.
 - **Türetilmiş bilgi:** "geçen sefer", sayaç, dönüşüm önerisi ve grafikler veritabanına yazılmaz. Her gösterimde kayıtlardan yeniden hesaplanır. Böylece geçmiş bir kaydı düzeltince hepsi kendiliğinden güncellenir. Sonradan eklenen bir özellik de eski kayıtlarla çalışır.
 
 ## 3. Kaydetme ve kayıt durumu
@@ -135,23 +135,22 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
   ```
   Rope Pushdown                                    Hedef 3 × 12–15
   Makine:  [ Kablo · kg ]  [● Kablo 2 · kademe ]  [+ Makine]
-  Geçen sefer (21 Eyl · Kablo 2):  10k×15 · 10k×13 · 10k×12
+  Geçen sefer (21 Eyl · Kablo 2):  10k × 15 · 13 · 12
   Son ilerlemeden beri 2 antrenman
 
-  Set   Kademe     Tekrar
-  1     [ (10) ]   [ (15) ]
-  2     [ (10) ]   [ (13) ]
-  3     [ (10) ]   [ (12) ]
+  Kademe      [ (10) ]
+  Tekrarlar   1. set    2. set    3. set
+              [ (15) ]  [ (13) ]  [ (12) ]
   + Set
   ```
   - **Makine:** o gün bu harekette en son kullanılan makine seçili gelir. Makine değişince "Geçen sefer", sayaç ve birim etiketi o makineye göre değişir.
-  - **"+ Makine":** ad ve birim girilerek makine eklenir. Ad kutusu, başka hareketlerde kullandığınız adları önerir.
-  - **Set kutuları:** ağırlıksız makinede yalnızca tekrar kutusu vardır.
+  - **"+ Makine":** ad ve birim girilerek makine eklenir; birim önceden seçili gelmez. Ad kutusu, başka hareketlerde kullandığınız adları önerir.
+  - **Kutular:** hareket başına tek ağırlık kutusu ve her set için bir tekrar kutusu vardır. Ağırlıksız makinede ağırlık kutusu yoktur.
   - **Ekleme:** "+ Set" bir satır ekler, sil düğmesi son satırı kaldırır. "+ Hareket ekle" yalnızca bu antrenmana hareket ekler.
   - **Bitirme:** "Bitir" bekleyen kayıtları bekler ve yarım setler için uyarır. "İptal", onay aldıktan sonra antrenmanı siler.
 - **Geçmiş:**
   - Antrenmanlar en yeniden eskiye listelenir.
-  - Ayrıntıda her hareket makinesiyle birlikte görünür, örneğin "Rope Pushdown · Kablo 2: 10k×15 · 10k×13".
+  - Ayrıntıda her hareket makinesiyle birlikte görünür, örneğin "Rope Pushdown · Kablo 2: 10k × 15 · 13".
   - Düzenle ve Sil buradadır. Düzenleme aynı kart ekranıyla yapılır; orada "geçen sefer", o antrenmandan önceki kayıttır.
 - **İlerleme:**
   - Liste günlere, günlerin altında hareketlere göre gruplanır. Programdan çıkarılmış ama kaydı olan hareketler "Programda olmayan" grubundadır.
@@ -175,9 +174,9 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
 
 Biçim ve kullanım ayrıntıları:
 - **Biçim:** sayılar ve tarihler Türkçe biçimdedir ("22,5 kg", "28 Eyl Pzt"). Setler kısa yazılır:
-  - kg: "50×12"
-  - kademe: "10k×12"
-  - ağırlıksız: "15"
+  - kg: "50 kg × 12 · 12 · 11"
+  - kademe: "10k × 12 · 12 · 10"
+  - ağırlıksız: "15 · 14"
 - **Ondalık:** ağırlık kutusu hem virgülü hem noktayı kabul eder.
 - **Yazı boyutu:** iPhone'un kutuya dokununca ekranı yakınlaştırmaması için kutulardaki yazı en az 16px'tir.
 - **Görünüm:** dokunma alanları büyüktür. Açık ya da koyu tema telefonun ayarına uyar.
@@ -227,14 +226,14 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - `seed.js` genişletilir: 5 gün, 34 satır, her harekete tahmini bir makine.
 - Ana ekrandan gün seçilir ve "Sıradaki" önerisi görünür.
 - Antrenman ekranında günün tüm hareketleri Aşama 1 kartıyla girilir. Hedefler kayda kopyalanır. Kaydetme şimdilik "Bitir" ile tek seferde yapılır.
-- Makine seçimi eklenir: o gün en son kullanılan makine seçili gelir. "+ Makine" ile ad ve birim girilir. Ağırlıksız makinede ağırlık kutusu yoktur.
+- Makine seçimi ve "+ Makine" (Aşama 1'de geldi) tüm hareketlerde çalışır. O gün en son kullanılan makine seçili gelir.
 - Dönüşümlü satırlarda iki hareketten biri şimdilik elle seçilir.
 - "+ Set" ve son seti silme eklenir.
 - *Bitti sayılır:*
   - Satır sayıları doğru: Push 6, Pull 8, Legs 8, Upper 6, Lower 6. Sıra ve hedefler programla aynı.
   - Overhead Rope Extension, Push'ta 2 × 15, Upper'da 3 × 12–15 hedefiyle açılıyor.
   - Legs'teki Standing Calf Raise kaydı Lower'da görünmüyor, tersi de geçerli. Bu hem ekranda hem testte doğrulanıyor.
-  - Eklenen kademeli makine sayfa yenilense de duruyor ve etiketi "kademe".
+  - Bir harekete eklenen makine, o hareketin geçtiği diğer günde de listede görünüyor (makineler harekete aittir).
   - Seed'de bir hedef değişince yeni antrenman yeni hedefi alıyor, eski kayıt eski hedefi gösteriyor.
 
 **Aşama 3: Otomatik kaydetme, kayıt durumu ve devam eden antrenman**
@@ -313,65 +312,75 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 Aşama 0 bittikten sonra başlar. Doğrulandıktan sonra durulur ve sonuç size bildirilir.
 
 **Kapsam**
-- **Ekran:** tek bir ekran olur: **Push · Rope Pushdown · Hedef 3 × 12–15**. Gün, hareket, hedef ve iki makine şimdilik `js/seed.js` içinde sabittir.
-- **Makineler:** "Kablo" (kg) ve "Kablo 2" (kademe). Adları sonra değiştirilebilir.
-- **Geçen sefer:** makine seçilince, Push'taki Rope Pushdown'ın o makinedeki en son kaydı görünür: tarih ve setler. Kayıt yoksa "Bu makinede önceki kayıt yok" yazar.
-- **Set satırları:** satır sayısı (3) hedeften gelir ve kutular boş başlar. Önceki değerler yalnızca soluk ipucudur ve değer sayılmaz.
-- **Kutular:** kutunun etiketi makinenin birimidir ("kg" ya da "kademe"). Telefonda sayısal klavye açılır. "22,5" ve "22.5" kabul edilir.
+- **Ekran:** tek bir ekran olur: **Push · Rope Pushdown · Hedef 3 × 12–15**. Gün, hareket ve hedef başlangıç verisinden (`js/seed.js`) gelir; program ilk açılışta veritabanına yazılır.
+- **Makineler:** Rope Pushdown yalnızca "Kablo" (kg) ile başlar. "+ Makine" ile başka makine eklenir:
+  - Adı ve birimi (kg, kademe ya da ağırlıksız) siz seçersiniz; birim önceden seçili gelmez.
+  - Boş ad, aynı ad ve seçilmemiş birim reddedilir.
+  - Eklenen makine kalıcıdır.
+- **Geçen sefer:** makine seçilince, Push'taki Rope Pushdown'ın o makinedeki en son kaydı görünür: tarih ve setler, örneğin "50 kg × 12 · 12 · 11". Kayıt yoksa "Bu makinede önceki kayıt yok" yazar.
+- **Kutular:**
+  - Tek bir ağırlık kutusu vardır; etiketi makinenin birimidir ("Ağırlık (kg)" ya da "Kademe"). Ağırlık tüm setlere uygulanır.
+  - Hedefteki set sayısı (3) kadar tekrar kutusu vardır.
+  - Kutular boş başlar; önceki değerler yalnızca soluk ipucudur.
+  - Telefonda sayısal klavye açılır. "22,5" ve "22.5" kabul edilir.
 - **Kaydet:**
-  - En az bir tam set gerekir. Yarım set için uyarı çıkar, boş satırlar kaydedilmez.
-  - Kayıt durumu görünür: Kaydediliyor… → Kaydedildi ✓ ya da Kaydedilemedi (Tekrar dene).
+  - En az bir setin tekrarı gerekir. Tekrar girilip ağırlık girilmezse uyarı çıkar; boş tekrar kutuları kaydedilmez.
+  - Kayıt durumu görünür: Kaydediliyor… → Kaydedildi ✓ ya da Kaydedilemedi (Tekrar dene). Makine eklerken de aynı durumlar görünür ("Makine eklendi ✓").
   - Kayıt IndexedDB'ye bitmiş bir antrenman olarak yazılır: tarih, gün, hareket, makine, birim, hedefin kopyası ve setler.
   - Başarılı kayıttan sonra kutular temizlenir ve "Geçen sefer" alanında yeni kayıt görünür.
-- **Bu aşamada olmayanlar:** diğer gün ve hareketler, otomatik kaydetme, devam eden antrenman, sayaç, dönüşüm, geçmiş, grafik, düzenleyici, yedek, PWA ve görsel tasarım.
+- **Bu aşamada olmayanlar:** diğer gün ve hareketler, otomatik kaydetme, devam eden antrenman, sayaç, dönüşüm, geçmiş, grafik, makineyi yeniden adlandırma ya da arşivleme, yedek, PWA ve görsel tasarım.
 
 **Ekran taslağı**
 ```
 Push · Rope Pushdown                          Hedef: 3 × 12–15
-Makine:  (●) Kablo · kg      ( ) Kablo 2 · kademe
+Makine:  (●) Kablo · kg    ( ) Kablo 2 · kademe    [+ Makine]
 
-Geçen sefer — 21 Eyl:   50×12 · 50×12 · 50×11
+Geçen sefer — 21 Eyl:   50 kg × 12 · 12 · 11
 
-Set    Ağırlık (kg)    Tekrar
-1      [ 50   ]        [ 12   ]     ← sizin girdiğiniz değer
-2      [ (50) ]        [ (12) ]     ← soluk ipucu: değer değil, boş sayılır
-3      [ (50) ]        [ (11) ]
-                 [ Kaydet ]          Kaydedildi ✓
+Ağırlık (kg)   [ 50 ]                          ← tüm setlere uygulanır
+Tekrarlar      1. set    2. set    3. set
+               [ 12 ]    [ (12) ]  [ (11) ]    ← soluk ipucu: değer değil, boş sayılır
+[ Kaydet ]   Kaydedildi ✓
 ```
 
-**Oluşacak ya da değişecek dosyalar**
+**Dosyalar**
 | Dosya | Görevi |
 |---|---|
 | `index.html`, `css/app.css` | sayfa iskeleti ve telefona uygun temel görünüm |
 | `js/main.js` | açılış: veritabanını aç, ekranı çiz |
 | `js/db.js` | IndexedDB yardımcıları: açma, okuma, yazma |
-| `js/store.js` | veri erişim katmanı: `loadSessions()`, `saveSession()` ve kayıt durumu (kaydediliyor / kaydedildi / hata) |
-| `js/seed.js` | geçici sabit veri: Push, Rope Pushdown, 3 × 12–15, iki makine |
-| `js/logic.js` | `parseWeight()`, `formatSet()`, `lastPerformance()`, `collectSets()` |
-| `js/views/exercise-logger.js` | ekran: makine seçimi, geçen sefer, set satırları, Kaydet, kayıt durumu |
+| `js/store.js` | veri erişim katmanı: `loadProgram()`, `saveProgram()`, `loadSessions()`, `saveSession()`; tek yazma sırası ve kayıt durumu |
+| `js/seed.js` | başlangıç verisi: Push, Rope Pushdown, 3 × 12–15, tek makine (Kablo · kg) |
+| `js/logic.js` | `parseWeight()`, `collectSets()`, `validationMessage()`, `lastPerformance()`, `equipmentError()`, `withEquipment()` ve biçimlendirme |
+| `js/views/exercise-logger.js` | ekran: makine seçimi ve ekleme, geçen sefer, ağırlık ve tekrar kutuları, Kaydet, kayıt durumu |
 | `tests/logic.test.js`, `tests/e2e.py` | birim testleri ve uçtan uca senaryo |
 
 **Birim testleri** (`tests/index.html`)
 1. Aynı gün, hareket ve makinede birkaç kayıt varsa en yenisini buluyor.
 2. Diğer makinenin kaydını getirmiyor.
 3. Aynı hareketin aynı makinede başka bir günde yapılan kaydını getirmiyor.
-4. Kayıt yoksa "yok" sonucunu döndürüyor.
-5. Boş kutulardan set oluşmuyor; ipuçları bugünkü seti doldurmuyor.
-6. Yarım satır set sayılmıyor ve uyarı üretiyor.
-7. "22,5" ve "22.5" 22.5 sayısına çevriliyor; "abc" reddediliyor.
-8. Setler birime göre yazılıyor: "50×12", "10k×12".
+4. Kayıt yoksa "yok" sonucunu döndürüyor; bitmemiş antrenman sayılmıyor.
+5. Ağırlık bir kez girilip tekrarı girilen her sete uygulanıyor; boş kutulardan set oluşmuyor.
+6. Tekrar girilip ağırlık girilmezse uyarı veriyor; ağırlıksızda tekrar yeter.
+7. "22,5" ve "22.5" 22.5 sayısına çevriliyor; geçersiz ağırlık ve tekrar reddediliyor.
+8. Setler birime göre yazılıyor: "50 kg × 12 · 12 · 11", "10k × 12 · 12 · 10".
+9. Makinenin adı ve birimi denetleniyor: boş ad, aynı ad (büyük/küçük harf fark etmez) ve seçilmemiş birim reddediliyor; ikinci kablo da kg olabiliyor.
+10. Yeni makine programın kopyasına ekleniyor; kayıt hedefin kopyasını taşıyor.
 
 **Uçtan uca senaryo** (`tests/e2e.py`, telefon boyutunda Chrome)
-1. Kablo seçiliyken "önceki kayıt yok" yazısı ve "kg" etiketi görünüyor.
-2. 50/12, 50/12, 50/11 girilip Kaydet'e basılıyor. "Kaydedildi ✓" çıkıyor, kutular temizleniyor ve "Geçen sefer" bugünün kaydını gösteriyor.
-3. Sayfa yenilendiğinde aynı kayıt görünüyor. Kutular boş, yalnızca ipucu var.
-4. Hiçbir şey girmeden Kaydet'e basılınca kayıt yapılmıyor ve "En az bir tam set girin" uyarısı çıkıyor.
-5. Yalnızca ağırlığı girilmiş bir satırla Kaydet'e basılınca yarım set uyarısı çıkıyor.
-6. Kablo 2 seçiliyor. "Önceki kayıt yok" yazısı ve "kademe" etiketi görünüyor. 10/12, 10/12, 11/10 kaydediliyor ve "10k×12" biçiminde görünüyor.
-7. Kablo'ya dönülünce yalnızca Kablo'nun değerleri görünüyor.
-8. "52,5"/10 kaydediliyor ve "Geçen sefer" en yeni kaydı gösteriyor (52,5 kg).
-9. Yazma hatası taklit ediliyor: "Kaydedilemedi" çıkıyor ve girilen değerler kutularda kalıyor. Hata kaldırılıp "Tekrar dene"ye basılınca "Kaydedildi ✓" oluyor.
-10. Ekranın açık ve koyu temada ekran görüntüsü alınıp gözle kontrol ediliyor.
+1. Başlangıçta yalnızca "Kablo · kg" var; tek ağırlık kutusu ve 3 tekrar kutusu görünüyor.
+2. 50 kg ile 12, 12, 11 kaydediliyor; kutular temizleniyor ve "Geçen sefer" güncelleniyor.
+3. Sayfa yenilenince kayıt duruyor; kutular boş, yalnızca ipucu var.
+4. Boş Kaydet: kayıt yapılmıyor ve uyarı çıkıyor.
+5. Tekrar girilip ağırlık girilmezse "Ağırlığı girin" uyarısı çıkıyor; ağırlık yazılınca uyarı kalkıyor.
+6. Makine formu boş adı, aynı adı ve seçilmemiş birimi reddediyor; "Vazgeç" formu kapatıyor.
+7. "Kablo 2 · kademe" elle ekleniyor; kayıt "10k × 12 · 12 · 10" biçiminde görünüyor.
+8. İkinci kablo da kg olabiliyor: "Kablo 3 · kg".
+9. Makineler sayfa yenilense de duruyor; kayıtları birbirine karışmıyor.
+10. "52,5" kg kaydediliyor ve "Geçen sefer" en yeni kaydı gösteriyor.
+11. Set kaydında yazma hatası: "Kaydedilemedi" çıkıyor, değerler kalıyor; "Tekrar dene" kaydediyor.
+12. Makine eklerken yazma hatası: form açık kalıyor; "Tekrar dene" makineyi ekliyor.
+13. Ekranın açık ve koyu temada ekran görüntüsü alınıp gözle kontrol ediliyor.
 
 **Elle deneme (sizin için)**
 - **Bilgisayarda:** `python serve.py` çalıştırıp tarayıcıda http://127.0.0.1:8000 adresini açın.

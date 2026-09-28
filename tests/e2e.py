@@ -117,18 +117,23 @@ def infrastructure_steps(run):
 
 # ---------------------------------------------------------------- Aşama 1
 
-def weight(page, row):
-    return page.get_by_label(f"{row}. set ağırlık")
+def weight_input(page):
+    return page.locator("#weight-input")
+
+
+def weight_label(page):
+    return page.locator("label[for='weight-input']")
 
 
 def reps(page, row):
     return page.get_by_label(f"{row}. set tekrar")
 
 
-def fill_sets(page, values):
-    for row, (weight_text, reps_text) in enumerate(values, start=1):
-        weight(page, row).fill(weight_text)
-        reps(page, row).fill(reps_text)
+def log_sets(page, weight_text, reps_texts):
+    if weight_text is not None:
+        weight_input(page).fill(weight_text)
+    for row, text in enumerate(reps_texts, start=1):
+        reps(page, row).fill(text)
 
 
 def save(page):
@@ -139,8 +144,19 @@ def machine(page, name):
     return page.get_by_role("radio", name=name, exact=True)
 
 
-def weight_header(page):
-    return page.get_by_role("columnheader").nth(1)
+def machine_names(page):
+    return [text.strip() for text in page.locator(".machines .chip:has(input)").all_text_contents()]
+
+
+def open_machine_form(page):
+    page.get_by_role("button", name="+ Makine").click()
+
+
+def submit_machine(page, name, unit_label):
+    page.get_by_label("Ad", exact=True).fill(name)
+    if unit_label:
+        page.get_by_role("radio", name=unit_label, exact=True).check()
+    page.get_by_role("button", name="Ekle").click()
 
 
 def last_time(page):
@@ -155,6 +171,10 @@ def form_message(page):
     return page.locator("#form-message")
 
 
+def machine_message(page):
+    return page.locator("#machine-message")
+
+
 def session_count(page):
     return page.evaluate(COUNT_SESSIONS_SCRIPT)
 
@@ -165,103 +185,167 @@ def phase1_steps(run):
     def expect_last(page, sets_text):
         expect(last_time(page)).to_have_text(f"Geçen sefer — {today['text']}: {sets_text}")
 
-    def step1(page):
+    def expect_cleared(page):
+        expect(weight_input(page)).to_have_value("")
+        for row in (1, 2, 3):
+            expect(reps(page, row)).to_have_value("")
+
+    def initial_screen(page):
         page.goto(run.base_url + "/")
         today["text"] = page.evaluate(TODAY_SCRIPT)
         expect(page).to_have_title("Antrenman Takibi")
         expect(page.get_by_role("heading", level=1)).to_have_text("Rope Pushdown")
         expect(page.locator(".target")).to_have_text("Hedef 3 × 12–15")
         expect(machine(page, "Kablo · kg")).to_be_checked()
+        assert machine_names(page) == ["Kablo · kg"], f"Başlangıçta tek makine olmalıydı: {machine_names(page)}"
         expect(last_time(page)).to_have_text("Bu makinede önceki kayıt yok")
-        expect(weight_header(page)).to_have_text("Ağırlık (kg)")
+        expect(weight_label(page)).to_have_text("Ağırlık (kg)")
+        expect(page.locator("input[data-field='weight']")).to_have_count(1)
+        expect(page.locator("input[data-field='reps']")).to_have_count(3)
 
-    def step2(page):
-        fill_sets(page, [("50", "12"), ("50", "12"), ("50", "11")])
+    def save_first(page):
+        log_sets(page, "50", ["12", "12", "11"])
         save(page)
         expect(save_status(page)).to_have_text("Kaydedildi ✓")
-        for row in (1, 2, 3):
-            expect(weight(page, row)).to_have_value("")
-            expect(reps(page, row)).to_have_value("")
-        expect_last(page, "50×12 · 50×12 · 50×11")
+        expect_cleared(page)
+        expect_last(page, "50 kg × 12 · 12 · 11")
         assert session_count(page) == 1, "Veritabanında 1 kayıt olmalıydı"
 
-    def step3(page):
+    def reload_keeps_record(page):
         page.reload()
-        expect_last(page, "50×12 · 50×12 · 50×11")
-        for row, (weight_hint, reps_hint) in enumerate([("50", "12"), ("50", "12"), ("50", "11")], start=1):
-            expect(weight(page, row)).to_have_value("")
-            expect(reps(page, row)).to_have_value("")
-            expect(weight(page, row)).to_have_attribute("placeholder", weight_hint)
-            expect(reps(page, row)).to_have_attribute("placeholder", reps_hint)
+        expect_last(page, "50 kg × 12 · 12 · 11")
+        expect_cleared(page)
+        expect(weight_input(page)).to_have_attribute("placeholder", "50")
+        for row, hint in enumerate(["12", "12", "11"], start=1):
+            expect(reps(page, row)).to_have_attribute("placeholder", hint)
 
-    def step4(page):
+    def empty_save(page):
         save(page)
-        expect(form_message(page)).to_have_text("En az bir tam set girin.")
+        expect(form_message(page)).to_have_text("En az bir setin tekrar sayısını girin.")
         assert session_count(page) == 1, "Boş kayıt yapılmamalıydı"
 
-    def step5(page):
-        weight(page, 1).fill("50")
+    def missing_weight(page):
+        log_sets(page, None, ["12", "12"])
         save(page)
-        expect(form_message(page)).to_contain_text("Yarım set: 1. set")
-        expect(reps(page, 1)).to_have_attribute("aria-invalid", "true")
-        page.screenshot(path=str(ARTIFACTS / "asama1-yarim-set.png"), full_page=True)
-        assert session_count(page) == 1, "Yarım set kaydedilmemeliydi"
-        weight(page, 1).fill("")
-
-    def step6(page):
-        machine(page, "Kablo 2 · kademe").check()
-        expect(last_time(page)).to_have_text("Bu makinede önceki kayıt yok")
-        expect(weight_header(page)).to_have_text("Kademe")
+        expect(form_message(page)).to_have_text("Ağırlığı girin.")
+        expect(weight_input(page)).to_have_attribute("aria-invalid", "true")
+        page.screenshot(path=str(ARTIFACTS / "asama1-agirlik-eksik.png"), full_page=True)
+        assert session_count(page) == 1, "Ağırlıksız kayıt yapılmamalıydı"
+        weight_input(page).fill("50")
         expect(form_message(page)).to_have_text("")
-        fill_sets(page, [("10", "12"), ("10", "12"), ("11", "10")])
+        expect(weight_input(page)).not_to_have_attribute("aria-invalid", "true")
+        log_sets(page, "", ["", ""])
+
+    def machine_form_validation(page):
+        open_machine_form(page)
+        expect(page.get_by_label("Ad", exact=True)).to_be_focused()
+        expect(page.get_by_role("radio", name="kg", exact=True)).not_to_be_checked()
+        page.get_by_role("button", name="Ekle").click()
+        expect(machine_message(page)).to_have_text("Makineye bir ad verin.")
+        submit_machine(page, "kablo", "kademe")
+        expect(machine_message(page)).to_have_text("Bu adda bir makine zaten var.")
+        page.screenshot(path=str(ARTIFACTS / "asama1-makine-formu.png"), full_page=True)
+        page.get_by_role("button", name="Vazgeç").click()
+        expect(page.locator(".machine-form")).to_have_count(0)
+        assert machine_names(page) == ["Kablo · kg"], "Vazgeçince makine eklenmemeliydi"
+        open_machine_form(page)
+        submit_machine(page, "Kablo 2", None)
+        expect(machine_message(page)).to_have_text("Birimi seçin: kg, kademe ya da ağırlıksız.")
+        page.get_by_role("button", name="Vazgeç").click()
+
+    def add_level_machine(page):
+        open_machine_form(page)
+        submit_machine(page, "Kablo 2", "kademe")
+        expect(save_status(page)).to_have_text("Makine eklendi ✓")
+        expect(machine(page, "Kablo 2 · kademe")).to_be_checked()
+        expect(last_time(page)).to_have_text("Bu makinede önceki kayıt yok")
+        expect(weight_label(page)).to_have_text("Kademe")
+        log_sets(page, "10", ["12", "12", "10"])
         save(page)
         expect(save_status(page)).to_have_text("Kaydedildi ✓")
-        expect_last(page, "10k×12 · 10k×12 · 11k×10")
+        expect_last(page, "10k × 12 · 12 · 10")
 
-    def step7(page):
+    def add_second_kg_machine(page):
+        open_machine_form(page)
+        submit_machine(page, "Kablo 3", "kg")
+        expect(machine(page, "Kablo 3 · kg")).to_be_checked()
+        expect(weight_label(page)).to_have_text("Ağırlık (kg)")
+        expect(last_time(page)).to_have_text("Bu makinede önceki kayıt yok")
+        log_sets(page, "45", ["12", "12", "12"])
+        save(page)
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        expect_last(page, "45 kg × 12 · 12 · 12")
+
+    def machines_persist_and_stay_separate(page):
+        page.reload()
+        names = machine_names(page)
+        assert names == ["Kablo · kg", "Kablo 2 · kademe", "Kablo 3 · kg"], f"Makineler kalıcı olmalıydı: {names}"
+        expect(machine(page, "Kablo · kg")).to_be_checked()
+        expect_last(page, "50 kg × 12 · 12 · 11")
+        machine(page, "Kablo 2 · kademe").check()
+        expect_last(page, "10k × 12 · 12 · 10")
+        machine(page, "Kablo 3 · kg").check()
+        expect_last(page, "45 kg × 12 · 12 · 12")
         machine(page, "Kablo · kg").check()
-        expect_last(page, "50×12 · 50×12 · 50×11")
-        expect(weight_header(page)).to_have_text("Ağırlık (kg)")
+        expect_last(page, "50 kg × 12 · 12 · 11")
 
-    def step8(page):
-        fill_sets(page, [("52,5", "10")])
+    def decimal_weight(page):
+        log_sets(page, "52,5", ["10"])
         save(page)
         expect(save_status(page)).to_have_text("Kaydedildi ✓")
-        expect_last(page, "52,5×10")
-        expect(weight(page, 1)).to_have_attribute("placeholder", "52,5")
-        expect(weight(page, 2)).to_have_attribute("placeholder", "")
+        expect_last(page, "52,5 kg × 10")
+        expect(weight_input(page)).to_have_attribute("placeholder", "52,5")
+        expect(reps(page, 2)).to_have_attribute("placeholder", "")
+        assert session_count(page) == 4, "4 kayıt olmalıydı"
 
-    def step9(page):
+    def save_error_and_retry(page):
         page.evaluate("window.__failWrites = true")
-        fill_sets(page, [("55", "8")])
+        log_sets(page, "55", ["8"])
         save(page)
-        expect(save_status(page)).to_contain_text("Kaydedilemedi")
-        expect(weight(page, 1)).to_have_value("55")
+        expect(save_status(page)).to_contain_text("Kaydedilemedi.")
+        expect(weight_input(page)).to_have_value("55")
         expect(reps(page, 1)).to_have_value("8")
-        assert session_count(page) == 3, "Başarısız yazma kayıt eklememeliydi"
+        assert session_count(page) == 4, "Başarısız yazma kayıt eklememeliydi"
         page.screenshot(path=str(ARTIFACTS / "asama1-kayit-hatasi.png"), full_page=True)
         page.evaluate("window.__failWrites = false")
         page.get_by_role("button", name="Tekrar dene").click()
         expect(save_status(page)).to_have_text("Kaydedildi ✓")
-        expect_last(page, "55×8")
-        assert session_count(page) == 4, "Tekrar denemede tek kayıt eklenmeliydi"
+        expect_last(page, "55 kg × 8")
+        assert session_count(page) == 5, "Tekrar denemede tek kayıt eklenmeliydi"
 
-    def step10(page):
+    def machine_error_and_retry(page):
+        page.evaluate("window.__failWrites = true")
+        open_machine_form(page)
+        submit_machine(page, "Kablo 4", "kg")
+        expect(save_status(page)).to_contain_text("Makine eklenemedi.")
+        expect(page.get_by_label("Ad", exact=True)).to_have_value("Kablo 4")
+        assert len(machine_names(page)) == 3, "Başarısız yazmada makine eklenmemeliydi"
+        page.evaluate("window.__failWrites = false")
+        page.get_by_role("button", name="Tekrar dene").click()
+        expect(save_status(page)).to_have_text("Makine eklendi ✓")
+        expect(machine(page, "Kablo 4 · kg")).to_be_checked()
+        page.reload()
+        assert machine_names(page)[-1] == "Kablo 4 · kg", "Tekrar denemede eklenen makine kalıcı olmalıydı"
+
+    def screenshots(page):
         page.screenshot(path=str(ARTIFACTS / "asama1-acik.png"), full_page=True)
         page.emulate_media(color_scheme="dark")
         page.screenshot(path=str(ARTIFACTS / "asama1-koyu.png"), full_page=True)
 
     return [
-        ("1. Kablo seçili; 'önceki kayıt yok' ve 'kg' etiketi görünüyor", step1),
-        ("2. 50/12, 50/12, 50/11 kaydediliyor; kutular temizleniyor, 'Geçen sefer' güncelleniyor", step2),
-        ("3. Sayfa yenilenince kayıt duruyor; kutular boş, yalnızca ipucu var", step3),
-        ("4. Boş Kaydet: kayıt yok, 'En az bir tam set girin' uyarısı", step4),
-        ("5. Yalnızca ağırlık girilen satırda yarım set uyarısı", step5),
-        ("6. Kablo 2: 'önceki kayıt yok', 'kademe' etiketi; kayıt '10k×12' biçiminde", step6),
-        ("7. Kablo'ya dönünce yalnızca Kablo'nun değerleri görünüyor", step7),
-        ("8. '52,5'/10 kaydediliyor; 'Geçen sefer' en yeni kaydı gösteriyor", step8),
-        ("9. Yazma hatası: 'Kaydedilemedi', değerler kalıyor; 'Tekrar dene' kaydediyor", step9),
-        ("10. Açık ve koyu tema ekran görüntüleri alınıyor", step10),
+        ("1. Başlangıçta yalnızca 'Kablo · kg' var; tek ağırlık kutusu, 3 tekrar kutusu", initial_screen),
+        ("2. 50 kg ile 12, 12, 11 kaydediliyor; kutular temizleniyor", save_first),
+        ("3. Sayfa yenilenince kayıt duruyor; kutular boş, yalnızca ipucu var", reload_keeps_record),
+        ("4. Boş Kaydet: kayıt yok, uyarı var", empty_save),
+        ("5. Tekrar girilip ağırlık girilmezse 'Ağırlığı girin' uyarısı", missing_weight),
+        ("6. Makine formu: boş ad, aynı ad ve seçilmemiş birim reddediliyor; Vazgeç", machine_form_validation),
+        ("7. 'Kablo 2 · kademe' elle ekleniyor; kayıt '10k × …' biçiminde", add_level_machine),
+        ("8. İkinci kablo da kg olabiliyor: 'Kablo 3 · kg'", add_second_kg_machine),
+        ("9. Makineler yenilemeden sonra duruyor; kayıtları birbirine karışmıyor", machines_persist_and_stay_separate),
+        ("10. '52,5' kg kaydediliyor; 'Geçen sefer' en yeni kaydı gösteriyor", decimal_weight),
+        ("11. Set kaydında yazma hatası: değerler kalıyor; 'Tekrar dene' kaydediyor", save_error_and_retry),
+        ("12. Makine eklerken yazma hatası: form kalıyor; 'Tekrar dene' ekliyor", machine_error_and_retry),
+        ("13. Açık ve koyu tema ekran görüntüleri alınıyor", screenshots),
     ]
 
 

@@ -54,6 +54,22 @@ main {
   padding: 16px;
 }
 
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+legend,
+.field label,
+.form-title {
+  margin: 0 0 6px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -87,22 +103,16 @@ h1 {
 }
 
 .machines {
+  margin-top: 16px;
+}
+
+.chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 16px 0 0;
-  padding: 0;
-  border: 0;
 }
 
-.machines legend {
-  margin-bottom: 6px;
-  padding: 0;
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
-.machine {
+.chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -110,19 +120,44 @@ h1 {
   padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
   cursor: pointer;
 }
 
-.machine:has(input:checked) {
+.chip:has(input:checked) {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
 
-.machine input {
+.chip input {
   width: 18px;
   height: 18px;
   margin: 0;
   accent-color: var(--accent);
+}
+
+.chip.add {
+  border-style: dashed;
+  color: var(--accent);
+}
+
+.machine-form {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--subtle);
+}
+
+.form-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.units {
+  margin-top: 12px;
 }
 
 .last {
@@ -137,31 +172,45 @@ h1 {
   color: var(--muted);
 }
 
-.sets {
-  width: 100%;
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+.field label {
+  display: block;
+}
+
+.log .weight {
   margin-top: 16px;
-  border-collapse: collapse;
 }
 
-.sets th {
-  padding: 0 8px 6px 0;
+.log .weight input {
+  max-width: 160px;
+}
+
+.reps {
+  margin-top: 16px;
+}
+
+.rep-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+}
+
+.rep {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rep span {
   color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-align: left;
+  font-size: 0.8125rem;
 }
 
-.sets td {
-  padding: 4px 8px 4px 0;
-}
-
-.sets th:first-child,
-.sets td:first-child {
-  width: 3rem;
-  color: var(--muted);
-}
-
-.sets input {
+input[type="text"] {
   width: 100%;
   min-height: 44px;
   padding: 8px 10px;
@@ -174,17 +223,17 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
-.sets input::placeholder {
+input[type="text"]::placeholder {
   color: var(--muted);
   opacity: 0.55;
 }
 
-.sets input:focus {
+input[type="text"]:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.sets input[aria-invalid="true"] {
+input[aria-invalid="true"] {
   border-color: var(--danger);
   background: var(--danger-soft);
 }

@@ -12,9 +12,10 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 ## Veri kuralları
 - Geçmişin anahtarı gün + hareket + makine (`dayId` + `exerciseId` + `equipmentId`). Farklı günler ve makineler birbirine karışmaz.
 - Her makinenin tek birimi var: `kg`, `level` (kademe), `none` (ağırlıksız). Birimler dönüştürülmez. Kaydı olan makinenin birimi değiştirilemez.
-- Makineler harekete aittir. Kaydı olan makine silinmez, arşivlenir.
+- Makineler harekete aittir. Başlangıçta her hareketin tek makinesi var; başkalarını kullanıcı "+ Makine" ile ekler ve birimi kendisi seçer (varsayılan birim yok). Kaydı olan makine silinmez, arşivlenir.
+- Program ilk açılışta `js/seed.js`'ten veritabanına (`meta` deposu, `program` anahtarı) yazılır; sonra oradan okunur.
 - Antrenman başlarken hareket adı, makine adı, birim ve hedef kayda kopyalanır. Program değişince eski kayıtlar değişmez.
-- Set: ağırlık + tekrar; ağırlıksız makinede yalnızca tekrar. Yarım satır uyarı verir, boş satır kaydedilmez. Önceki değerler yalnızca ipucudur, kutuları doldurmaz.
+- Ağırlık hareket başına bir kez girilir ve tekrarı girilen her sete uygulanır; kayıtta her set bu ağırlığı taşır. Ağırlıksız makinede yalnızca tekrar girilir. Tekrar girilip ağırlık girilmezse uyarı verir; boş tekrar kutusu kaydedilmez. Önceki değerler yalnızca ipucudur, kutuları doldurmaz.
 - Seti girilmemiş hareket "atlandı" sayılır ve kayda yazılmaz. Bitmemiş antrenmanlar hesaplara katılmaz.
 - "Geçen sefer", ilerleme sayacı, dönüşüm önerisi ve grafikler kayıtlardan hesaplanır; veritabanına yazılmaz.
 

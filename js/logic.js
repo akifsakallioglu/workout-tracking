@@ -26,40 +26,37 @@ export function parseReps(text) {
   return number > 0 ? number : NaN;
 }
 
-// Kutulara yazılanları setlere çevirir; boş satırlar atlanır. Önceki değerler (ipuçları) bu
-// fonksiyona hiç gelmez, bu yüzden bugünkü setleri dolduramaz.
-export function collectSets(rows, unit) {
-  const sets = [];
+// Ağırlık hareket başına bir kez girilir ve tekrarı girilen her sete uygulanır; boş tekrar
+// kutuları atlanır. Önceki değerler (ipuçları) bu fonksiyona hiç gelmez, bu yüzden bugünkü
+// setleri dolduramaz. Sorun varsa set döndürülmez.
+export function collectSets({ weight: weightText, reps: repsTexts }, unit) {
   const problems = [];
-  rows.forEach((row, index) => {
-    const reps = parseReps(row.reps);
-    if (unit === 'none') {
-      if (reps === null) return;
-      if (Number.isNaN(reps)) problems.push({ row: index, kind: 'invalid' });
-      else sets.push({ weight: null, reps });
-      return;
-    }
-    const weight = parseWeight(row.weight);
-    if (weight === null && reps === null) return;
-    if (Number.isNaN(weight) || Number.isNaN(reps)) problems.push({ row: index, kind: 'invalid' });
-    else if (weight === null || reps === null) problems.push({ row: index, kind: 'half' });
-    else sets.push({ weight, reps });
+  const weight = unit === 'none' ? null : parseWeight(weightText);
+  if (Number.isNaN(weight)) problems.push({ field: 'weight', kind: 'invalid' });
+  const reps = [];
+  repsTexts.forEach((text, index) => {
+    const value = parseReps(text);
+    if (value === null) return;
+    if (Number.isNaN(value)) problems.push({ field: 'reps', row: index, kind: 'invalid' });
+    else reps.push(value);
   });
+  if (unit !== 'none' && weight === null && reps.length > 0) problems.push({ field: 'weight', kind: 'missing' });
+  const sets = problems.length ? [] : reps.map((count) => ({ weight, reps: count }));
   return { sets, problems };
 }
 
 // Kaydetmeyi engelleyen bir durum varsa kullanıcıya gösterilecek mesaj; yoksa boş metin.
-export function validationMessage(sets, problems) {
-  const rowsOf = (kind) => problems.filter((problem) => problem.kind === kind).map((problem) => problem.row + 1);
-  const invalid = rowsOf('invalid');
-  if (invalid.length) {
-    return `Geçersiz değer: ${ordinalList(invalid)} set. Ağırlık için 22,5 gibi, tekrar için 12 gibi bir sayı girin.`;
+export function validationMessage(sets, problems, unit) {
+  const level = unit === 'level';
+  if (problems.some((problem) => problem.field === 'weight' && problem.kind === 'invalid')) {
+    return level ? 'Kademe geçersiz. 10 gibi bir sayı girin.' : 'Ağırlık geçersiz. 22,5 gibi bir sayı girin.';
   }
-  const half = rowsOf('half');
-  if (half.length) {
-    return `Yarım set: ${ordinalList(half)} set. Ağırlığı ve tekrarı birlikte girin ya da satırı boşaltın.`;
+  const invalidReps = problems.filter((problem) => problem.field === 'reps').map((problem) => problem.row + 1);
+  if (invalidReps.length) return `Geçersiz tekrar: ${ordinalList(invalidReps)} set. 12 gibi bir tam sayı girin.`;
+  if (problems.some((problem) => problem.field === 'weight' && problem.kind === 'missing')) {
+    return level ? 'Kademeyi girin.' : 'Ağırlığı girin.';
   }
-  return sets.length ? '' : 'En az bir tam set girin.';
+  return sets.length ? '' : 'En az bir setin tekrar sayısını girin.';
 }
 
 function ordinalList(numbers) {
@@ -108,17 +105,53 @@ export function buildSession({ id, now, day, item, exerciseId, exercise, equipme
   };
 }
 
+// Yeni makinenin adı ve birimi için denetim; sorun yoksa boş metin. Birimi kullanıcı seçer:
+// aynı salondaki iki kablo makinesinin ikisi de kg olabilir.
+export function equipmentError(exercise, name, unit) {
+  const trimmed = name.trim();
+  if (!trimmed) return 'Makineye bir ad verin.';
+  if (trimmed.length > 40) return 'Ad en fazla 40 karakter olabilir.';
+  const key = trimmed.toLocaleLowerCase('tr');
+  if (exercise.equipment.some((equipment) => equipment.name.trim().toLocaleLowerCase('tr') === key)) {
+    return 'Bu adda bir makine zaten var.';
+  }
+  if (!Object.hasOwn(UNIT_LABELS, unit)) return 'Birimi seçin: kg, kademe ya da ağırlıksız.';
+  return '';
+}
+
+// Programı değiştirmeden, hareketin makine listesine yeni makinenin eklendiği bir kopyasını döndürür.
+export function withEquipment(program, exerciseId, equipment) {
+  const exercise = program.exercises[exerciseId];
+  return {
+    ...program,
+    exercises: {
+      ...program.exercises,
+      [exerciseId]: { ...exercise, equipment: [...exercise.equipment, equipment] },
+    },
+  };
+}
+
 export function formatWeight(value) {
   return numberFormat.format(value);
 }
 
-// kg: "50×12", kademe: "10k×12", ağırlıksız: "15"
+// kg: "50 kg", kademe: "10k"
+export function formatWeightWithUnit(value, unit) {
+  return unit === 'level' ? `${formatWeight(value)}k` : `${formatWeight(value)} kg`;
+}
+
+// Tek set: kg "50×12", kademe "10k×12", ağırlıksız "15"
 export function formatSet({ weight, reps }, unit) {
   if (unit === 'none') return String(reps);
   return `${formatWeight(weight)}${unit === 'level' ? 'k' : ''}×${reps}`;
 }
 
+// Setlerin ağırlığı aynıysa "50 kg × 12 · 12 · 11" ya da "10k × 12 · 12 · 10"; ağırlıksızda
+// "15 · 14". Ağırlıklar farklıysa her set ayrı yazılır: "50×12 · 52,5×10".
 export function formatSets(sets, unit) {
+  const reps = sets.map((set) => set.reps).join(' · ');
+  if (unit === 'none') return reps;
+  if (sets.every((set) => set.weight === sets[0].weight)) return `${formatWeightWithUnit(sets[0].weight, unit)} × ${reps}`;
   return sets.map((set) => formatSet(set, unit)).join(' · ');
 }
 

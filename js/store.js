@@ -1,5 +1,6 @@
 // Veri erişim katmanı: ekranlar veritabanına yalnızca buradan ulaşır.
-import { getAll, openDatabase, put } from './db.js';
+import { get, getAll, openDatabase, put } from './db.js';
+import { program as seedProgram } from './seed.js';
 
 let db = null;
 let queue = Promise.resolve();
@@ -11,18 +12,43 @@ export async function initStore() {
   db = await openDatabase();
 }
 
+// İlk açılışta başlangıç programı veritabanına yazılır; sonra hep veritabanındaki hâli kullanılır.
+export async function loadProgram() {
+  const stored = await get(db, 'meta', 'program');
+  if (stored) {
+    const { key, ...program } = stored;
+    return program;
+  }
+  const program = structuredClone(seedProgram);
+  await enqueue(() => put(db, 'meta', { key: 'program', ...program }));
+  return program;
+}
+
 export function loadSessions() {
   return getAll(db, 'sessions');
 }
 
-// Tüm yazmalar tek sıradan geçer: aynı anda tek yazma olur. "Kaydedildi" durumu, sıradaki
-// bütün yazmalar bitince gelir; bir yazma başarısız olursa durum "error" olur.
+export function saveProgram(program) {
+  return trackedWrite(() => put(db, 'meta', { key: 'program', ...program }));
+}
+
 export function saveSession(session) {
+  return trackedWrite(() => put(db, 'sessions', session));
+}
+
+// Tüm yazmalar tek sıradan geçer: aynı anda tek yazma olur.
+function enqueue(write) {
+  const result = queue.then(write);
+  queue = result.catch(() => {});
+  return result;
+}
+
+// Kullanıcının yaptığı değişikliklerin yazması: kayıt durumu güncellenir. "Kaydedildi" durumu
+// sıradaki bütün yazmalar bitince gelir; bir yazma başarısız olursa durum "error" olur.
+function trackedWrite(write) {
   pending++;
   setStatus({ state: 'saving', error: null });
-  const write = queue.then(() => put(db, 'sessions', session));
-  queue = write.catch(() => {});
-  return write.then(
+  return enqueue(write).then(
     () => {
       pending--;
       if (pending === 0) setStatus({ state: 'saved', error: null });
