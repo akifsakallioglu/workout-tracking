@@ -1,6 +1,7 @@
-// Açılış ve yönlendirme: #/ ana ekran, #/antrenman/<gün> antrenman ekranı.
+// Açılış ve yönlendirme: #/ ana ekran, #/antrenman/<gün> antrenman ekranı, #/ayarlar ayarlar.
 import { initStore } from './store.js';
 import { renderHome } from './views/home.js';
+import { renderSettings } from './views/settings.js';
 import { renderWorkout } from './views/workout.js';
 
 const app = document.getElementById('app');
@@ -26,9 +27,10 @@ async function show() {
   app.replaceChildren(container);
   const token = ++showCount;
   const workout = location.hash.match(/^#\/antrenman\/([\w-]+)$/);
-  const shown = workout
-    ? await renderWorkout(container, { dayId: workout[1], navigate })
-    : await renderHome(container, { flash: message });
+  let shown;
+  if (workout) shown = await renderWorkout(container, { dayId: workout[1], navigate });
+  else if (location.hash === '#/ayarlar') shown = await renderSettings(container);
+  else shown = await renderHome(container, { flash: message });
   // Bu ekran yüklenirken adres yeniden değiştiyse geç kalan ekran yenisinin yerine geçmesin.
   if (token === showCount) view = shown;
   else shown?.destroy?.();

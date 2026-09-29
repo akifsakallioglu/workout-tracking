@@ -9,10 +9,13 @@ veritabanı) başlar; akıştaki adımlar sırayla aynı sayfada çalışır ve 
 başarısız olursa sonrakiler atlanır. Ekran görüntüleri tests/artifacts/
 klasörüne kaydedilir; bu klasör git'e eklenmez.
 """
+import json
+import re
 import sys
 import threading
 import urllib.error
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from playwright.sync_api import expect, sync_playwright
@@ -680,6 +683,154 @@ def autosave_steps(run):
     ]
 
 
+# ---------------------------------------------------------------- Yedekleme
+
+PUT_SCRIPT = """
+([storeName, value]) => new Promise((resolve, reject) => {
+  const request = indexedDB.open('antrenman-takibi');
+  request.onerror = () => reject(request.error);
+  request.onsuccess = () => {
+    const db = request.result;
+    const transaction = db.transaction(storeName, 'readwrite');
+    transaction.objectStore(storeName).put(value);
+    transaction.oncomplete = () => { db.close(); resolve(); };
+    transaction.onerror = () => { db.close(); reject(transaction.error); };
+  };
+})
+"""
+
+
+def iso_days_ago(days):
+    moment = datetime.now(timezone.utc) - timedelta(days=days)
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def snapshot(page):
+    program = stored_program(page)
+    program.pop("key", None)
+    return {"program": program, "sessions": sorted(sessions(page), key=lambda session: session["id"])}
+
+
+def backup_steps(run):
+    state = {}
+
+    def create_data(page):
+        page.goto(run.base_url + "/")
+        state["today"] = today(page)
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        log_sets(rope, "50", ["12"])
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        open_day(page, "pull", "Pull")
+        lat = card(page, "Lat Pulldown (wide grip)")
+        add_machine(lat, "Makine", "kg")
+        log_sets(lat, "40", ["10"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        go_home(page)
+
+    def download_backup(page):
+        page.get_by_role("link", name="Ayarlar").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Ayarlar")
+        expect(page.locator("#last-backup")).to_have_text("Son yedek: henüz yedek alınmadı")
+        expect(page.locator("#storage-status")).not_to_be_empty()
+        with page.expect_download() as info:
+            page.get_by_role("button", name="Yedeği indir").click()
+        download = info.value
+        assert re.fullmatch(r"antrenman-yedegi-\d{4}-\d{2}-\d{2}\.json", download.suggested_filename), download.suggested_filename
+        path = ARTIFACTS / download.suggested_filename
+        download.save_as(path)
+        state["backup_path"] = path
+        backup = json.loads(path.read_text(encoding="utf-8"))
+        assert (backup["app"], backup["backupVersion"], len(backup["sessions"])) == ("antrenman-takibi", 1, 2), backup.keys()
+        assert sum(1 for session in backup["sessions"] if not session["finishedAt"]) == 1, "Devam eden antrenman da yedekte olmalı"
+        assert backup["program"]["exercises"]["rope-pushdown"]["equipment"][0]["name"] == "Kablo"
+        expect(page.locator("#backup-message")).to_have_text(f"Yedek hazırlandı: {download.suggested_filename} (2 antrenman).")
+        expect(page.locator("#last-backup")).to_contain_text(f"Son yedek: {state['today']}")
+        state["exported"] = snapshot(page)
+        page.screenshot(path=str(ARTIFACTS / "asama4-ayarlar.png"), full_page=True)
+
+    def change_data(page):
+        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Devam et").click()
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Antrenmanı iptal et").click()
+        expect(page.locator("#flash")).to_have_text("Antrenman iptal edildi.")
+        open_day(page, "push", "Push")
+        add_machine(card(page, "Cable Fly"), "Kablo 3", "kg")
+        expect(save_status(page)).to_have_text("Makine eklendi ✓")
+        go_home(page)
+        assert snapshot(page) != state["exported"], "Veriler değişmiş olmalıydı"
+        state["changed"] = snapshot(page)
+
+    def broken_files_rejected(page):
+        page.get_by_role("link", name="Ayarlar").click()
+        file_input = page.locator("#restore-file")
+        file_input.set_input_files({"name": "bozuk.json", "mimeType": "application/json", "buffer": b"bozuk"})
+        expect(page.locator("#restore-message")).to_have_text("Dosya okunamadı: JSON biçiminde bir yedek değil. Hiçbir şey değiştirilmedi.")
+        file_input.set_input_files({"name": "baska.json", "mimeType": "application/json", "buffer": b'{"app": "baska"}'})
+        expect(page.locator("#restore-message")).to_have_text("Bu dosya bir Antrenman Takibi yedeği değil. Hiçbir şey değiştirilmedi.")
+        expect(page.locator("#restore-summary")).to_have_count(0)
+        assert snapshot(page) == state["changed"], "Bozuk dosya hiçbir şeyi değiştirmemeli"
+
+    def summary_and_cancel(page):
+        page.locator("#restore-file").set_input_files(state["backup_path"])
+        summary = page.locator("#restore-summary")
+        expect(summary).to_contain_text("2 antrenman (devam eden: Pull)")
+        expect(summary).to_contain_text("Bu cihazdaki 1 antrenman ve program, yedektekilerle değiştirilecek.")
+        page.screenshot(path=str(ARTIFACTS / "asama4-geri-yukleme-ozeti.png"), full_page=True)
+        page.get_by_role("button", name="Vazgeç").click()
+        expect(summary).to_have_count(0)
+        assert snapshot(page) == state["changed"], "Vazgeçince hiçbir şey değişmemeli"
+
+    def failed_restore_changes_nothing(page):
+        page.evaluate("window.__failWrites = true")
+        page.locator("#restore-file").set_input_files(state["backup_path"])
+        page.get_by_role("button", name="Geri yükle").click()
+        expect(page.locator("#restore-message")).to_contain_text("Yedek geri yüklenemedi; hiçbir şey değiştirilmedi.")
+        page.evaluate("window.__failWrites = false")
+        assert snapshot(page) == state["changed"], "Yarıda kalan geri yükleme eski verileri silmemeli"
+
+    def restore_brings_back_same_data(page):
+        page.locator("#restore-file").set_input_files(state["backup_path"])
+        page.get_by_role("button", name="Geri yükle").click()
+        expect(page.locator("#restore-message")).to_have_text("Yedek geri yüklendi: 2 antrenman.")
+        assert snapshot(page) == state["exported"], "Geri yüklenen veri yedekle aynı olmalı"
+        page.get_by_role("link", name="← Günler").click()
+        expect(page.locator("#resume-title")).to_have_text("Pull")
+        page.get_by_role("link", name="Devam et").click()
+        lat = card(page, "Lat Pulldown (wide grip)")
+        expect(weight_input(lat)).to_have_value("40")
+        go_home(page)
+        assert stored_program(page)["exercises"]["cable-fly"]["equipment"] == [], "Yedekten sonra eklenen makine gitmeli"
+
+    def reminders(page):
+        expect(page.locator("#backup-reminder")).to_have_count(0)
+        page.evaluate(PUT_SCRIPT, ["meta", {"key": "settings", "lastBackupAt": iso_days_ago(40)}])
+        page.reload()
+        expect(page.locator("#backup-reminder")).to_contain_text("Son yedek 40 gün önce alındı.")
+        page.screenshot(path=str(ARTIFACTS / "asama4-hatirlatma.png"))
+        page.evaluate(PUT_SCRIPT, ["meta", {"key": "settings"}])
+        finished = next(session for session in sessions(page) if session["finishedAt"])
+        page.evaluate(PUT_SCRIPT, ["sessions", {**finished, "startedAt": iso_days_ago(35), "finishedAt": iso_days_ago(35)}])
+        page.reload()
+        expect(page.locator("#backup-reminder")).to_contain_text("Henüz yedek almadınız.")
+        page.locator("#backup-reminder").get_by_role("link", name="Yedek al").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Ayarlar")
+
+    return [
+        ("Veri oluşturuluyor: bitmiş Push ve devam eden Pull", create_data),
+        ("Yedek indiriliyor: dosya adı, içerik (devam eden dahil) ve son yedek tarihi", download_backup),
+        ("Yedekten sonra veriler değiştiriliyor", change_data),
+        ("Bozuk ve yabancı dosya reddediliyor; hiçbir şey değişmiyor", broken_files_rejected),
+        ("Geri yükleme özeti gösteriliyor; 'Vazgeç' hiçbir şeyi değiştirmiyor", summary_and_cancel),
+        ("Geri yükleme yarıda hata verirse eski veriler olduğu gibi kalıyor", failed_restore_changes_nothing),
+        ("Geri yükleyince veri yedekle birebir aynı geliyor", restore_brings_back_same_data),
+        ("Hatırlatma: 30 günden eski yedek ve hiç alınmamış yedek", reminders),
+    ]
+
+
 # ---------------------------------------------------------------- Günler, makineler, dönüşümlü satır
 
 def day_separation_steps(run):
@@ -916,6 +1067,7 @@ def main():
             run.flow("Ana ekran ve program", program_steps(run))
             run.flow("Push antrenmanı", push_workout_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Otomatik kaydetme ve devam eden antrenman", autosave_steps(run), init_script=FAIL_WRITES_SCRIPT)
+            run.flow("Yedekleme", backup_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))
             run.flow("Hedef kopyası", target_copy_steps(run))
             run.flow("Aşama 1 verisinden yükseltme", upgrade_steps(run))

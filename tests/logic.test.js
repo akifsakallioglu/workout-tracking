@@ -1,6 +1,9 @@
 import { assert, assertEqual, test } from './harness.js';
 import {
   activeSession,
+  backupFileName,
+  backupReminder,
+  buildBackup,
   buildEntry,
   buildSession,
   collectSets,
@@ -15,6 +18,7 @@ import {
   lastDoneDate,
   lastPerformance,
   nextDayId,
+  parseBackup,
   parseReps,
   parseWeight,
   upgradeProgram,
@@ -379,4 +383,68 @@ test('kayıt; gün, hareket, makine, birim ve hedefin kopyasını taşıyor', ()
   assertEqual(entry.target, { sets: 3, repMin: 12, repMax: 15 });
   item.repMax = 20; // program sonradan değişse de kayıttaki hedef değişmez
   assertEqual(entry.target.repMax, 15);
+});
+
+// ---------------------------------------------------------------- Yedek
+
+function sampleBackup() {
+  const program = structuredClone(seed);
+  program.exercises['rope-pushdown'].equipment.push({ id: 'eq-1', name: 'Kablo', unit: 'kg' });
+  const finished = session({ id: 'bitti', date: '2026-09-22T12:00:00.000Z', equipmentId: 'eq-1' });
+  const active = {
+    ...session({ id: 'devam', date: '2026-09-29T12:00:00.000Z', finished: false }),
+    entries: [],
+    draft: {
+      cards: [{ item: seed.days[0].items[4], exerciseId: 'rope-pushdown', equipmentId: 'eq-1', weight: '50', reps: ['12', '', ''] }],
+    },
+  };
+  return buildBackup(program, [finished, active], '2026-09-29T18:00:00.000Z');
+}
+
+test('yedek JSON’a yazılıp geri okununca aynen geliyor', () => {
+  const backup = sampleBackup();
+  const { backup: parsed, error } = parseBackup(JSON.stringify(backup));
+  assertEqual(error, undefined);
+  assertEqual(parsed, backup);
+  assertEqual([parsed.app, parsed.backupVersion], ['antrenman-takibi', 1]);
+});
+
+test('bozuk ya da yabancı yedek reddediliyor', () => {
+  const broken = (change) => {
+    const backup = sampleBackup();
+    change(backup);
+    return parseBackup(JSON.stringify(backup)).error;
+  };
+  assertEqual(parseBackup('bu bir yedek değil').error, 'Dosya okunamadı: JSON biçiminde bir yedek değil.');
+  assertEqual(parseBackup('{"app":"baska-uygulama"}').error, 'Bu dosya bir Antrenman Takibi yedeği değil.');
+  assertEqual(broken((backup) => { backup.backupVersion = 99; }), 'Bu yedek uygulamanın daha yeni bir sürümüyle alınmış.');
+  assertEqual(broken((backup) => { delete backup.sessions; }), 'Yedek dosyası bozuk: antrenmanlar okunamadı.');
+  assertEqual(
+    broken((backup) => { backup.program.exercises['rope-pushdown'].equipment[0].unit = 'lb'; }),
+    'Yedek dosyası bozuk: Rope Pushdown hareketinin makinesi okunamadı.',
+  );
+  assertEqual(
+    broken((backup) => { backup.program.days[0].items[0].options = ['olmayan-hareket']; }),
+    'Yedek dosyası bozuk: Push gününde bir satır okunamadı.',
+  );
+  assertEqual(broken((backup) => { backup.sessions[0].startedAt = 'dün'; }), 'Yedek dosyası bozuk: 1. antrenman okunamadı.');
+  assertEqual(broken((backup) => { backup.sessions[1].id = 'bitti'; }), 'Yedek dosyası bozuk: 2. antrenman okunamadı.');
+  assertEqual(broken((backup) => { backup.sessions[0].entries[0].sets[0].reps = 1.5; }), 'Yedek dosyası bozuk: 1. antrenman okunamadı.');
+  assertEqual(broken((backup) => { backup.sessions[1].draft.cards[0].reps = [12]; }), 'Yedek dosyası bozuk: 2. antrenman okunamadı.');
+});
+
+test('yedek dosyasının adı yerel tarihi taşıyor', () => {
+  assertEqual(backupFileName(new Date(2026, 8, 29, 23, 30)), 'antrenman-yedegi-2026-09-29.json');
+});
+
+test('yedek hatırlatması: son yedekten ya da ilk antrenmandan bu yana 30 günden fazla geçince', () => {
+  const now = new Date('2026-09-29T12:00:00.000Z');
+  const finishedOn = (date) => session({ id: date, date });
+  assertEqual(backupReminder(undefined, [], now), null, 'kayıt yoksa hatırlatma yok');
+  assertEqual(backupReminder(undefined, [finishedOn('2026-09-19T12:00:00.000Z')], now), null);
+  assertEqual(backupReminder(undefined, [finishedOn('2026-08-20T12:00:00.000Z')], now), { days: 40, never: true });
+  assertEqual(backupReminder('2026-08-29T12:00:00.000Z', [finishedOn('2026-08-20T12:00:00.000Z')], now), { days: 31, never: false });
+  assertEqual(backupReminder('2026-09-24T12:00:00.000Z', [finishedOn('2026-08-20T12:00:00.000Z')], now), null);
+  const unfinished = session({ id: 'devam', date: '2026-08-01T12:00:00.000Z', finished: false });
+  assertEqual(backupReminder(undefined, [unfinished], now), null, 'bitmemiş antrenman sayılmaz');
 });

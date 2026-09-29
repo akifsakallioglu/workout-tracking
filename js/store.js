@@ -1,5 +1,5 @@
 // Veri erişim katmanı: ekranlar veritabanına yalnızca buradan ulaşır.
-import { get, getAll, openDatabase, put, remove } from './db.js';
+import { get, getAll, openDatabase, put, remove, replaceAll } from './db.js';
 import { upgradeProgram, usedEquipmentIds } from './logic.js';
 import { program as seedProgram } from './seed.js';
 
@@ -51,6 +51,35 @@ export function deleteSession(id) {
 // Sırada bekleyen ya da yazılmakta olan bir değişiklik var mı.
 export function hasPendingWrites() {
   return pending > 0;
+}
+
+// Ayarlar (bu cihaza özel, yedeğe girmez): { lastBackupAt }
+export async function loadSettings() {
+  await queue;
+  const { key, ...settings } = (await get(db, 'meta', 'settings')) ?? {};
+  return settings;
+}
+
+export function saveSettings(settings) {
+  return trackedWrite(() => put(db, 'meta', { key: 'settings', ...settings }));
+}
+
+// Yedeği geri yükler: program ve bütün antrenmanlar tek adımda değiştirilir.
+export function restoreBackup(program, sessions) {
+  return trackedWrite(() => replaceAll(db, { key: 'program', ...program }, sessions));
+}
+
+// Tarayıcının verileri kendiliğinden (örneğin yer darlığında) silmemesi. Sonuç: true (kalıcı),
+// false (değil) ya da null (tarayıcı desteklemiyor).
+export async function isStoragePersisted() {
+  if (!navigator.storage?.persisted) return null;
+  return navigator.storage.persisted();
+}
+
+export async function requestPersistentStorage() {
+  if (!navigator.storage?.persist) return null;
+  if (await navigator.storage.persisted()) return true;
+  return navigator.storage.persist();
 }
 
 // Tüm yazmalar tek sıradan geçer: aynı anda tek yazma olur.

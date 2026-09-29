@@ -274,3 +274,114 @@ export function formatDate(iso, now = new Date()) {
 export function formatDateTime(iso, now = new Date()) {
   return `${formatDate(iso, now)} ${timeFormat.format(new Date(iso))}`;
 }
+
+// ---------------------------------------------------------------- Yedek
+
+export const BACKUP_APP = 'antrenman-takibi';
+export const BACKUP_VERSION = 1;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Yedek: programın ve devam eden dahil bütün antrenmanların eksiksiz kopyası.
+export function buildBackup(program, sessions, exportedAt) {
+  return { app: BACKUP_APP, backupVersion: BACKUP_VERSION, exportedAt, program, sessions };
+}
+
+// "antrenman-yedegi-2026-09-29.json" (yerel tarih)
+export function backupFileName(now = new Date()) {
+  const pad = (number) => String(number).padStart(2, '0');
+  return `antrenman-yedegi-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.json`;
+}
+
+// Yedek dosyasının metnini okur ve denetler: sorun yoksa { backup }, varsa { error }.
+export function parseBackup(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { error: 'Dosya okunamadı: JSON biçiminde bir yedek değil.' };
+  }
+  const error = backupError(data);
+  return error ? { error } : { backup: data };
+}
+
+// Yedek hatırlatması: son yedekten (hiç yedek yoksa ilk bitirilen antrenmandan) bu yana 30 günden
+// fazla geçtiyse { days, never }; yoksa null.
+export function backupReminder(lastBackupAt, sessions, now = new Date()) {
+  const starts = sessions.filter((session) => session.finishedAt).map((session) => session.startedAt);
+  if (!starts.length) return null;
+  const since = lastBackupAt ?? starts.reduce((first, start) => (start < first ? start : first));
+  const days = Math.floor((now - new Date(since)) / DAY_MS);
+  return days > 30 ? { days, never: !lastBackupAt } : null;
+}
+
+function backupError(data) {
+  if (!isObject(data) || data.app !== BACKUP_APP) return 'Bu dosya bir Antrenman Takibi yedeği değil.';
+  if (!Number.isInteger(data.backupVersion) || data.backupVersion < 1) return 'Bu dosya bir Antrenman Takibi yedeği değil.';
+  if (data.backupVersion > BACKUP_VERSION) return 'Bu yedek uygulamanın daha yeni bir sürümüyle alınmış.';
+  if (!isDate(data.exportedAt)) return corrupt('yedek tarihi okunamadı');
+
+  const { program, sessions } = data;
+  if (!isObject(program) || !isObject(program.exercises) || !Array.isArray(program.days)) return corrupt('program okunamadı');
+  for (const [id, exercise] of Object.entries(program.exercises)) {
+    if (!isObject(exercise) || !isText(exercise.name) || !Array.isArray(exercise.equipment)) {
+      return corrupt(`"${id}" hareketi okunamadı`);
+    }
+    if (!exercise.equipment.every(isEquipment)) return corrupt(`${exercise.name} hareketinin makinesi okunamadı`);
+  }
+  for (const day of program.days) {
+    if (!isObject(day) || !isText(day.id) || !isText(day.name) || !Array.isArray(day.items)) return corrupt('bir gün okunamadı');
+    const validItem = (item) =>
+      isItem(item) && item.options.every((option) => Object.hasOwn(program.exercises, option));
+    if (!day.items.every(validItem)) return corrupt(`${day.name} gününde bir satır okunamadı`);
+  }
+
+  if (!Array.isArray(sessions)) return corrupt('antrenmanlar okunamadı');
+  const ids = new Set();
+  for (const [index, session] of sessions.entries()) {
+    if (!isSession(session) || ids.has(session.id)) return corrupt(`${index + 1}. antrenman okunamadı`);
+    ids.add(session.id);
+  }
+  return '';
+}
+
+const corrupt = (detail) => `Yedek dosyası bozuk: ${detail}.`;
+const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isText = (value) => typeof value === 'string' && value.length > 0;
+const isDate = (value) => typeof value === 'string' && !Number.isNaN(Date.parse(value));
+const isCount = (value) => Number.isInteger(value) && value > 0;
+const isUnit = (value) => Object.hasOwn(UNIT_LABELS, value);
+const isTarget = (target) =>
+  isObject(target) && isCount(target.sets) && isCount(target.repMin) && isCount(target.repMax) && target.repMax >= target.repMin;
+const isItem = (item) =>
+  isTarget(item) && isText(item.id) && Array.isArray(item.options) && item.options.length > 0 && item.options.every(isText);
+const isEquipment = (equipment) =>
+  isObject(equipment) && isText(equipment.id) && isText(equipment.name) && isUnit(equipment.unit);
+const isSet = (set) => isObject(set) && isCount(set.reps) && (set.weight === null || (typeof set.weight === 'number' && set.weight > 0));
+const isEntry = (entry) =>
+  isObject(entry) &&
+  isText(entry.exerciseId) &&
+  isText(entry.equipmentId) &&
+  isText(entry.name) &&
+  isText(entry.equipmentName) &&
+  isUnit(entry.unit) &&
+  isTarget(entry.target) &&
+  Array.isArray(entry.sets) &&
+  entry.sets.every(isSet);
+const isDraftCard = (card) =>
+  isObject(card) &&
+  isItem(card.item) &&
+  isText(card.exerciseId) &&
+  (card.equipmentId === null || isText(card.equipmentId)) &&
+  typeof card.weight === 'string' &&
+  Array.isArray(card.reps) &&
+  card.reps.every((value) => typeof value === 'string');
+const isSession = (session) =>
+  isObject(session) &&
+  isText(session.id) &&
+  isText(session.dayId) &&
+  isText(session.dayName) &&
+  isDate(session.startedAt) &&
+  (session.finishedAt === null || isDate(session.finishedAt)) &&
+  Array.isArray(session.entries) &&
+  session.entries.every(isEntry) &&
+  (session.draft === undefined || (isObject(session.draft) && Array.isArray(session.draft.cards) && session.draft.cards.every(isDraftCard)));

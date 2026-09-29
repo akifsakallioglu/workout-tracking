@@ -250,6 +250,9 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - JSON dışa aktarma (indirme ve paylaşma) eklenir.
 - İçe aktarma eklenir: dosya denetlenir, onay alınır ve veri tek adımda değiştirilir.
 - Son yedek tarihi, 30 günlük hatırlatma ve kalıcı depolama isteği eklenir.
+- Ayarlar ekranına ana ekranın sağ üstündeki "Ayarlar" bağlantısıyla gidilir. Yedeğe devam eden antrenman da girer; cihaza özel ayarlar girmez.
+- Hiç yedek alınmadıysa hatırlatma, ilk bitirilen antrenmandan 30 gün sonra başlar.
+- Geri yükleme yarıda hata verirse işlem iptal edilir ve eski veriler olduğu gibi kalır.
 - *Bitti sayılır:* dışa aktarılıp içe aktarılan veri aynen geri geliyor. Bozuk dosya reddediliyor ve hiçbir şey değişmiyor.
 
 **Aşama 5: PWA ve yayına alma**

@@ -21,7 +21,7 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - "Geçen sefer", ilerleme sayacı, dönüşüm önerisi ve grafikler kayıtlardan hesaplanır; veritabanına yazılmaz.
 
 ## Ekranlar
-- `js/main.js` yönlendirir: `#/` ana ekran (`views/home.js`), `#/antrenman/<gün>` antrenman ekranı (`views/workout.js`). Kart `views/exercise-card.js` içindedir (Aşama 8'deki geçmiş düzenlemede de kullanılacak).
+- `js/main.js` yönlendirir: `#/` ana ekran (`views/home.js`), `#/antrenman/<gün>` antrenman ekranı (`views/workout.js`), `#/ayarlar` ayarlar (`views/settings.js`). Kart `views/exercise-card.js` içindedir (Aşama 8'deki geçmiş düzenlemede de kullanılacak).
 - Ekranlar `{ beforeLeave?, flush?, hasUnsavedChanges?, destroy? }` döndürür; `main.js` ekran değişmeden önce `beforeLeave`, sayfa kapanırken `flush` ve `hasUnsavedChanges` çağırır.
 - Devam eden antrenman, ilk değer girilince `finishedAt: null` ve `draft.cards` (ham kutu değerleri, seçili hareket ve makine, başlarken kopyalanan hedef) ile kaydedilir. "Bitir" aynı kaydı `entries` ile bitmiş hâle getirir, "İptal" siler. Aynı anda tek devam eden antrenman olur; başka gün açılınca "devam et / bitir / sil" ekranı çıkar.
 
@@ -31,6 +31,12 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Okumalar (`loadProgram`, `loadSessions`) sıradaki yazmaların bitmesini bekler; ekranlar daha önce istenen bütün değişiklikleri görür.
 - "Bitir" ve "Güncelle" bekleyen yazmaları bekler; hata varsa işlemi yapmaz.
 - Kayıpsızlık garantisi verilmez; arayüzde de verilmez.
+
+## Yedek
+- Biçim: `{ app: "antrenman-takibi", backupVersion: 1, exportedAt, program, sessions }`; devam eden antrenman dahil. Cihaza özel ayarlar (`meta/settings`: `lastBackupAt`) yedeğe girmez.
+- Geri yüklemede dosya `parseBackup` ile denetlenir; özet gösterilir, onaydan sonra program ve antrenmanlar tek işlemde değiştirilir (`replaceAll`). İşlem yarıda hata verirse iptal edilir, hiçbir şey değişmez.
+- Hatırlatma: son yedekten (hiç yoksa ilk bitirilen antrenmandan) bu yana 30 günden fazla geçtiyse ana ekranda.
+- İlk bitirilen antrenmandan sonra tarayıcıdan kalıcı depolama istenir; Ayarlar'da durumu görünür ve elle istenebilir.
 
 ## Testler
 - Birim testleri: `tests/logic.test.js`, tarayıcıda http://127.0.0.1:8000/tests/ adresinde çalışır. Saf fonksiyonlar `js/logic.js` içindedir.
@@ -43,4 +49,4 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Yeni kararlar bu dosyaya işlenir.
 
 ## Aşamalar
-0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme · 5 PWA ve yayına alma · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
+0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi

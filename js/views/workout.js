@@ -17,6 +17,7 @@ import {
   loadProgram,
   loadSessions,
   onSaveStatus,
+  requestPersistentStorage,
   saveProgram,
   saveSession,
 } from '../store.js';
@@ -260,6 +261,8 @@ export async function renderWorkout(container, { dayId, navigate }) {
       // Yazmalar tek sıradan geçtiği için bekleyen taslak yazmaları bu yazmadan önce biter.
       await saveSession(session);
       state.saved = true;
+      // İlk bitirilen antrenmandan sonra tarayıcıdan verileri kendiliğinden silmemesi istenir.
+      requestPersistentStorage().catch((error) => console.warn('Kalıcı depolama istenemedi', error));
       navigate('#/', `${day.name} antrenmanı kaydedildi ✓`);
     } catch (error) {
       console.warn('Antrenman bitirilemedi', error);

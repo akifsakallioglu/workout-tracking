@@ -49,12 +49,27 @@ export function remove(db, storeName, key) {
   return write(db, storeName, (store) => store.delete(key));
 }
 
-function write(db, storeName, operation) {
+// Programı ve bütün antrenmanları tek adımda değiştirir: ya hepsi yazılır ya hiçbiri.
+export function replaceAll(db, program, sessions) {
+  return write(db, ['meta', 'sessions'], (meta, sessionStore) => {
+    sessionStore.clear();
+    for (const session of sessions) sessionStore.put(session);
+    meta.put(program);
+  });
+}
+
+function write(db, storeNames, operation) {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite', { durability: 'strict' });
+    const transaction = db.transaction(storeNames, 'readwrite', { durability: 'strict' });
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error ?? new Error('Yazma iptal edildi'));
-    operation(transaction.objectStore(storeName));
+    try {
+      operation(...[storeNames].flat().map((name) => transaction.objectStore(name)));
+    } catch (error) {
+      // İşlemin yarısı yapılmışken hata çıkarsa hiçbir değişiklik kalmasın.
+      transaction.abort();
+      reject(error);
+    }
   });
 }
