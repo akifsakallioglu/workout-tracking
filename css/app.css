@@ -12,6 +12,7 @@
   --accent-soft: #dfece2;
   --accent-text: #faf1e1;
   --highlight: #b8490f; /* simgedeki turuncunun yazıda okunur tonu */
+  --chart-line: #1f7a45; /* grafik çizgisi: simgenin yeşili, zemine karşı en az 3:1 */
   --ok: #1d6b3c;
   --danger: #c42b1c;
   --danger-soft: #fdeceb;
@@ -32,6 +33,7 @@
     --accent-soft: rgba(124, 207, 156, 0.14);
     --accent-text: #0c1811;
     --highlight: #ff9a5c;
+    --chart-line: #44a870;
     --ok: #7ccf9c;
     --danger: #ff7b72;
     --danger-soft: rgba(255, 123, 114, 0.12);
@@ -391,19 +393,28 @@ a.button {
   margin-bottom: 16px;
 }
 
+/* Başlık tek satırda kalır; bağlantılar sığmazsa alt satıra geçer. */
 .home-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  column-gap: 12px;
+}
+
+.home-head h1 {
+  white-space: nowrap;
 }
 
 .head-links {
   display: flex;
-  gap: 16px;
+  gap: 20px;
 }
 
 .head-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--accent);
   text-decoration: none;
 }
@@ -637,6 +648,141 @@ a.button {
   display: flex;
   justify-content: center;
   margin: 24px 0 8px;
+}
+
+/* İlerleme */
+.page-head + .section-title {
+  margin-top: 0;
+}
+
+.progress-counter {
+  margin: 16px 0 0;
+  font-weight: 600;
+}
+
+.metrics {
+  margin-top: 16px;
+}
+
+.readout {
+  min-height: 64px;
+  margin-top: 16px;
+}
+
+.readout p {
+  margin: 0;
+}
+
+.readout-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.readout-value {
+  font-size: 1.375rem;
+}
+
+.readout-sets {
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-host {
+  margin-top: 8px;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y; /* dikey kaydırma sayfayı kaydırır, yatay sürükleme noktaları gezer */
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: crosshair;
+}
+
+.chart:focus {
+  outline: none;
+}
+
+.chart:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.chart .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.chart .tick {
+  fill: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart .crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.chart .line {
+  fill: none;
+  stroke: var(--chart-line);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart .dot,
+.chart .marker {
+  fill: var(--chart-line);
+  stroke: var(--surface); /* zemin renginde halka: nokta çizginin üstünde okunur kalır */
+  stroke-width: 2;
+}
+
+.chart-note {
+  padding: 24px 0 8px;
+}
+
+.records-card {
+  margin-top: 12px;
+}
+
+.records {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.records th {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+}
+
+.records th,
+.records td {
+  padding: 8px 8px 8px 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.records tr:last-child td {
+  border-bottom: 0;
+}
+
+.records td:first-child {
+  white-space: nowrap;
+}
+
+.records .number {
+  white-space: nowrap;
 }
 
 /* Başka bir gün devam ederken */

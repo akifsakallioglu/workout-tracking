@@ -19,6 +19,7 @@ export async function renderHome(container, { flash }) {
       <h1>Antrenman Takibi</h1>
       <nav class="head-links" aria-label="Diğer ekranlar">
         <a class="head-link" href="#/gecmis">Geçmiş</a>
+        <a class="head-link" href="#/ilerleme">İlerleme</a>
         <a class="head-link" href="#/ayarlar">Ayarlar</a>
       </nav>
     </header>

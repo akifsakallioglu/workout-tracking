@@ -10,7 +10,7 @@ Amaç, salonda telefondan kullanacağınız bir antrenman günlüğü. Uygulama 
 - **Dil:** arayüz Türkçe. Hareket adları yazdığınız gibi kalır. Koddaki adlar İngilizcedir.
 - **Kayıt anahtarı:** kayıtlar gün + hareket + makine bazında tutulur. Legs'teki Standing Calf Raise, bir önceki Legs antrenmanındaki Standing Calf Raise ile karşılaştırılır; Lower'daki kayıtlar buna karışmaz.
 - **Makineler:** bir hareket birden çok makinede yapılabilir. O gün hangi makine boşsa onu seçersiniz ve her makinenin kaydı ayrı tutulur. Her makinenin kendi birimi vardır: kg, kademe ya da ağırlıksız. Örneğin Rope Pushdown bir makinede 50 kg, kg yazmayan diğer makinede 10k (10. kademe) olarak kaydedilir.
-- **İlerleme:** her gün + hareket + makine için "son ilerlemeden beri N antrenman" sayacı tutulur. Grafikler de olur ama sayacın yerine geçmez.
+- **İlerleme:** her gün + hareket + makine için son ilerlemenin kaç antrenman önce olduğunu gösteren bir sayaç tutulur ("Son ilerleme 3 antrenman önce"). Grafikler de olur ama sayacın yerine geçmez.
 - **Program düzenleyici** ilk sürümde var.
 - **Dönüşümlü satırlar:** Wrist Curl / Reverse Curl ve Cable Chop / Reverse Cable Chop her antrenmanda sırayla değişir.
 - **İlk sürümde yok:** dinlenme sayacı ve ağırlık önerisi.
@@ -93,11 +93,12 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
   - Ağırlığı aynıdır ve tekrarı daha yüksektir.
   - Ağırlıksız makinede tekrarı daha yüksektir.
 - **İlerleme:** en az bir set arttıysa o antrenman "ilerleme" sayılır.
-- **Sayaç:** aynı anahtarda son ilerlemeden sonra gelen "yapıldı" girişlerinin sayısıdır.
-  - Hiç ilerleme yoksa ilk kayıt başlangıç noktasıdır ve "İlk kayıttan beri N antrenman" yazar.
+- **Sayaç:** aynı anahtarda son ilerlemenin kaç antrenman önce olduğudur. Son antrenman 1 antrenman öncedir.
+  - Son antrenmanda ilerleme varsa "Geçen antrenmanda ilerledin", daha önceyse "Son ilerleme N antrenman önce" yazar.
+  - Hiç ilerleme yoksa "Henüz ilerleme yok" yazar. Tek kayıt varken karşılaştırılacak bir şey olmadığından sayaç görünmez.
   - Başka bir makine ya da gün bu sayacı değiştirmez.
 - **Gösterim:**
-  - Antrenman kartında "Geçen sefer" satırının altında "Son ilerlemeden beri N antrenman" yazar.
+  - Antrenman kartında "Geçen sefer" satırının altında sayaç yazar.
   - Set girerken bir önceki kayda göre artış varsa "Bu antrenmanda ilerledin" görünür.
   - İlerleme ekranında sayaç grafiğin üstünde ayrıca durur.
 
@@ -132,7 +133,7 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
   Rope Pushdown                                    Hedef 3 × 12–15
   Makine:  [ Kablo · kg ]  [● Kablo 2 · kademe ]  [+ Makine]
   Geçen sefer (21 Eyl · Kablo 2):  10k × 15 · 13 · 12
-  Son ilerlemeden beri 2 antrenman
+  Son ilerleme 3 antrenman önce
 
   Kademe      [ (10) ]
   Tekrarlar   1. set    2. set    3. set
@@ -273,7 +274,7 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 
 **Aşama 6: İlerleme sayacı**
 - 4. bölümdeki kurallar saf fonksiyon olarak yazılır ve kartta gösterilir.
-- Sayaç metinleri: "Son ilerlemeden beri N antrenman", hiç ilerleme yoksa "İlk kayıttan beri N antrenman", son antrenmanda ilerleme varsa "Geçen antrenmanda ilerledin"; tek kayıt varken sayaç görünmez. Set girerken artış varsa "Bu antrenmanda ilerledin ✓", önceki kayıt yoksa "İlk kayıt: başlangıç noktası".
+- Sayaç metinleri (Aşama 9'da kullanıcının isteğiyle değişti): "Son ilerleme N antrenman önce", son antrenmanda ilerleme varsa "Geçen antrenmanda ilerledin", hiç ilerleme yoksa "Henüz ilerleme yok"; tek kayıt varken sayaç görünmez. Set girerken artış varsa "Bu antrenmanda ilerledin ✓", önceki kayıt yoksa "İlk kayıt: başlangıç noktası".
 - Kullanıcının isteğiyle bu aşamada makine silme de geldi: kartta "Düzenle" → "Sil" → onay. Kaydı olmayan makine tamamen silinir, kaydı olan arşivlenir. Uygulama simgesi kullanıcının seçtiği görselle değişti.
 - *Bitti sayılır:*
   - Tablodaki her örnek testte doğru sonucu veriyor.
@@ -302,6 +303,11 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 
 **Aşama 9: İlerleme grafikleri**
 - Her gün + hareket + makine için grafik çizilir. Ölçüler birime göre değişir ve sayaç grafiğin üstünde ayrıca durur. Grafik kodundan önce dataviz skill'i yüklenir.
+- İlerlemeye ana ekranın üstündeki "İlerleme" bağlantısıyla gidilir. Listede her hareketin antrenman sayısı ve son tarihi görünür.
+- Makine sekmelerinde en son kullanılan makine önce gelir; silinmiş makine "(silinmiş)" ile görünür.
+- Grafik kütüphanesiz SVG'dir (`js/chart.js`). Her nokta bir antrenmandır ve noktalar eşit aralıklıdır. Grafiğin üstünde seçili noktanın değeri, tarihi ve setleri yazar; başta son antrenman seçilidir. Dokununca, parmağı yatay kaydırınca ya da ok tuşlarıyla en yakın nokta seçilir.
+- Grafiğin altında aynı değerler tablo olarak durur ("Kayıtlar"). Tek kayıt varken grafik yerine not görünür.
+- Çizgi rengi simgenin yeşilinin grafikte okunur tonudur: açık temada `#1f7a45`, koyu temada `#44a870`; ikisi de renk denetiminden geçti.
 - *Bitti sayılır:*
   - Her makinenin grafiği kendi biriminde çiziliyor.
   - Ölçü seçenekleri birime göre değişiyor.

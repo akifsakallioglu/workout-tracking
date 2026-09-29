@@ -106,7 +106,7 @@ export function cardLiveText(card, equipment, last) {
   return liveProgressText(last?.sets ?? null, sets, equipment.unit);
 }
 
-function machineLabel(option) {
+export function machineLabel(option) {
   return `${option.name} · ${UNIT_LABELS[option.unit]}${option.archived ? ' (silinmiş)' : ''}`;
 }
 
@@ -154,7 +154,7 @@ function machineFormHtml({ name, unit, error }, index, busy) {
     </form>`;
 }
 
-function radioChip(name, value, label, checked) {
+export function radioChip(name, value, label, checked) {
   return `
     <label class="chip">
       <input type="radio" name="${name}" value="${escapeHtml(value)}"${checked ? ' checked' : ''}>

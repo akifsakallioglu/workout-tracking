@@ -946,7 +946,7 @@ def machines_and_counter_steps(run):
         rope = card(page, "Rope Pushdown")
         expect(radio(rope, "Kablo · kg")).to_be_checked()
         expect(last_time(rope)).to_contain_text("40 kg × 12 · 11 · 10")
-        expect(counter_line(rope)).to_have_text("İlk kayıttan beri 1 antrenman")
+        expect(counter_line(rope)).to_have_text("Henüz ilerleme yok")
         expect(live_progress(rope)).to_be_hidden()
 
     def live_progress_and_reset(page):
@@ -968,7 +968,7 @@ def machines_and_counter_steps(run):
         expect(live_progress(rope)).to_be_hidden()
         finish(page)
         open_day(page, "push", "Push")
-        expect(counter_line(card(page, "Rope Pushdown"))).to_have_text("Son ilerlemeden beri 1 antrenman")
+        expect(counter_line(card(page, "Rope Pushdown"))).to_have_text("Son ilerleme 2 antrenman önce")
 
     def other_machine_keeps_counter(page):
         rope = card(page, "Rope Pushdown")
@@ -981,16 +981,16 @@ def machines_and_counter_steps(run):
         expect(radio(rope, "Kablo 3 · kg")).to_be_checked()
         expect(counter_line(rope)).to_have_count(0)
         radio(rope, "Kablo · kg").check()
-        expect(counter_line(rope)).to_have_text("Son ilerlemeden beri 1 antrenman")
+        expect(counter_line(rope)).to_have_text("Son ilerleme 2 antrenman önce")
         page.screenshot(path=str(ARTIFACTS / "asama6-sayac.png"))
         go_home(page)
 
     return [
         ("Kaydı olmayan makine onayla tamamen siliniyor; 'Vazgeç' silmiyor", delete_unused_machine),
         ("Kaydı olan makine listeden kalkıyor, kayıtlar duruyor; aynı ad yeniden eklenebiliyor", delete_used_machine),
-        ("Mevcut kayıtlardan sayaç: 'İlk kayıttan beri 1 antrenman'", counter_from_existing_records),
+        ("Mevcut kayıtlardan sayaç: ilerleme yokken 'Henüz ilerleme yok'", counter_from_existing_records),
         ("Set girerken 'Bu antrenmanda ilerledin ✓'; sonra 'Geçen antrenmanda ilerledin'", live_progress_and_reset),
-        ("İlerleme olmayan antrenmandan sonra 'Son ilerlemeden beri 1 antrenman'", no_progress_increments),
+        ("İlerleme olmayan antrenmandan sonra 'Son ilerleme 2 antrenman önce'", no_progress_increments),
         ("Başka makine kullanılınca ilk makinenin sayacı değişmiyor", other_machine_keeps_counter),
     ]
 
@@ -1197,6 +1197,191 @@ def history_steps(run):
         ("Boş kayıt uyarısı; kaydetmeden çıkarken onay", validation_and_leave_guard),
         ("Düzenlerken makine değiştiriliyor", change_machine),
         ("Silmeden önce onay soruluyor", delete_with_confirmation),
+    ]
+
+
+
+# ---------------------------------------------------------------- İlerleme grafikleri
+
+def readout(page):
+    return page.locator("#readout")
+
+
+def chip_names(page, legend):
+    group = page.locator("fieldset").filter(has=page.locator("legend", has_text=legend))
+    return [text.strip() for text in group.locator(".chip").all_text_contents()]
+
+
+def record_values(page):
+    return page.locator(".records tbody td.number").all_text_contents()
+
+
+def tap_point(page, index):
+    box = page.locator(".chart .dot").nth(index).bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+
+
+def progress_steps(run):
+    state = {}
+
+    def entry(exercise_id, name, equipment_id, equipment_name, unit, set_list):
+        return {
+            "exerciseId": exercise_id,
+            "equipmentId": equipment_id,
+            "name": name,
+            "equipmentName": equipment_name,
+            "unit": unit,
+            "options": [exercise_id],
+            "target": {"sets": 3, "repMin": 12, "repMax": 15},
+            "sets": [{"weight": weight, "reps": count} for weight, count in set_list],
+        }
+
+    def record(record_id, days_ago, day_id, day_name, entries):
+        return {
+            "id": record_id,
+            "dayId": day_id,
+            "dayName": day_name,
+            "startedAt": iso_at(days_ago),
+            "finishedAt": iso_at(days_ago, 60),
+            "entries": entries,
+        }
+
+    def date_of(page, days_ago):
+        return page.evaluate(
+            "(iso) => new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' }).format(new Date(iso))",
+            iso_at(days_ago),
+        )
+
+    def list_grouped_by_day(page):
+        page.goto(run.base_url + "/")
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        add_machine(rope, "Kablo 2", "kademe")
+        go_home(page)
+        open_day(page, "lower", "Lower")
+        add_machine(card(page, "Ab Wheel Roll-Out"), "Vücut ağırlığı", "ağırlıksız")
+        go_home(page)
+        ids = {
+            (exercise_id, equipment["name"]): equipment["id"]
+            for exercise_id, exercise in stored_program(page)["exercises"].items()
+            for equipment in exercise["equipment"]
+        }
+        kablo = ids[("rope-pushdown", "Kablo")]
+        kablo2 = ids[("rope-pushdown", "Kablo 2")]
+        wheel = ids[("ab-wheel-roll-out", "Vücut ağırlığı")]
+        rope_kg = lambda set_list: entry("rope-pushdown", "Rope Pushdown", kablo, "Kablo", "kg", set_list)
+        rope_level = lambda set_list: entry("rope-pushdown", "Rope Pushdown", kablo2, "Kablo 2", "level", set_list)
+        records = [
+            record("p1", 21, "push", "Push", [rope_kg([(40, 12), (40, 11), (40, 10)])]),
+            record("p2", 14, "push", "Push", [rope_kg([(40, 12), (40, 12), (40, 10)])]),
+            record("p3", 10, "push", "Push", [rope_level([(10, 15), (10, 13)])]),
+            record("p4", 7, "push", "Push", [
+                rope_kg([(40, 12), (40, 12), (40, 10)]),
+                entry("eski-hareket", "Eski Hareket", "eski-makine", "Eski makine", "kg", [(20, 10)]),
+            ]),
+            record("p5", 3, "push", "Push", [rope_level([(11, 12), (11, 10)])]),
+            record("l1", 12, "lower", "Lower", [entry("ab-wheel-roll-out", "Ab Wheel Roll-Out", wheel, "Vücut ağırlığı", "none", [(None, 10), (None, 8)])]),
+            record("l2", 5, "lower", "Lower", [entry("ab-wheel-roll-out", "Ab Wheel Roll-Out", wheel, "Vücut ağırlığı", "none", [(None, 12), (None, 10)])]),
+        ]
+        for item in records:
+            page.evaluate(PUT_SCRIPT, ["sessions", item])
+        state["first_date"] = date_of(page, 21)
+        page.reload()
+        page.get_by_role("link", name="İlerleme").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("İlerleme")
+        expect(page.locator(".section-title")).to_have_text(["Push", "Lower", "Programda olmayan"])
+        rows = page.locator(".days .day")
+        expect(rows).to_have_count(3)
+        expect(rows.nth(0).locator(".day-name")).to_have_text("Rope Pushdown")
+        expect(rows.nth(0).locator(".muted")).to_have_text(f"5 antrenman · son: {date_of(page, 3)}")
+        expect(rows.nth(1).locator(".day-name")).to_have_text("Ab Wheel Roll-Out")
+        expect(rows.nth(2).locator(".day-name")).to_have_text("Eski Hareket")
+        expect(rows.nth(2).locator(".muted")).to_have_text(f"Push · 1 antrenman · son: {date_of(page, 7)}")
+        page.screenshot(path=str(ARTIFACTS / "asama9-liste.png"), full_page=True)
+
+    def level_chart(page):
+        page.locator(".days .day").first.click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Rope Pushdown")
+        expect(page.locator(".page-head .muted")).to_have_text("Push")
+        assert chip_names(page, "Makine") == ["Kablo 2 · kademe", "Kablo · kg"], chip_names(page, "Makine")
+        expect(page.get_by_role("radio", name="Kablo 2 · kademe", exact=True)).to_be_checked()
+        assert chip_names(page, "Ölçü") == ["En yüksek kademe", "Toplam tekrar"], chip_names(page, "Ölçü")
+        expect(page.locator("#progress-counter")).to_have_text("Geçen antrenmanda ilerledin")
+        expect(page.locator(".chart .dot")).to_have_count(2)
+        expect(readout(page).locator(".readout-value")).to_have_text("11k")
+        expect(readout(page).locator(".readout-sets")).to_have_text("11k × 12 · 10")
+        assert record_values(page) == ["11k", "10k"], record_values(page)
+        page.get_by_role("radio", name="Toplam tekrar", exact=True).check()
+        expect(readout(page).locator(".readout-value")).to_have_text("22")
+        assert record_values(page) == ["22", "28"], record_values(page)
+
+    def kg_chart(page):
+        page.get_by_role("radio", name="Kablo · kg", exact=True).check()
+        assert chip_names(page, "Ölçü") == ["Tahmini 1TM", "En ağır", "Hacim"], chip_names(page, "Ölçü")
+        expect(page.get_by_role("radio", name="Tahmini 1TM", exact=True)).to_be_checked()
+        expect(page.locator("#progress-counter")).to_have_text("Son ilerleme 2 antrenman önce")
+        expect(page.locator(".chart .dot")).to_have_count(3)
+        expect(readout(page).locator(".readout-value")).to_have_text("56 kg")
+        expect(page.locator(".records thead th").nth(1)).to_have_text("Tahmini 1TM")
+        page.get_by_role("radio", name="Hacim", exact=True).check()
+        expect(readout(page).locator(".readout-value")).to_have_text("1.360 kg")
+        assert record_values(page) == ["1.360 kg", "1.360 kg", "1.320 kg"], record_values(page)
+        page.get_by_role("radio", name="En ağır", exact=True).check()
+        assert record_values(page) == ["40 kg", "40 kg", "40 kg"], record_values(page)
+        page.get_by_role("radio", name="Hacim", exact=True).check()
+
+    def tap_shows_sets(page):
+        tap_point(page, 0)
+        expect(readout(page).locator(".readout-value")).to_have_text("1.320 kg")
+        expect(readout(page).locator(".readout-sets")).to_have_text("40 kg × 12 · 11 · 10")
+        expect(readout(page).locator(".muted")).to_contain_text(state["first_date"])
+        crosshair = page.locator(".chart .crosshair").get_attribute("x1")
+        assert crosshair == page.locator(".chart .dot").first.get_attribute("cx"), crosshair
+        page.locator(".chart").focus()
+        page.keyboard.press("ArrowRight")
+        expect(readout(page).locator(".readout-sets")).to_have_text("40 kg × 12 · 12 · 10")
+        page.keyboard.press("End")
+        page.keyboard.press("ArrowLeft")
+        page.mouse.move(0, 0)
+        expect(readout(page).locator(".readout-sets")).to_have_text("40 kg × 12 · 12 · 10")
+        tap_point(page, 0)
+        page.evaluate("document.activeElement.blur()")
+        page.screenshot(path=str(ARTIFACTS / "asama9-grafik.png"), full_page=True)
+        page.emulate_media(color_scheme="dark")
+        page.screenshot(path=str(ARTIFACTS / "asama9-grafik-koyu.png"), full_page=True)
+        page.emulate_media(color_scheme="light")
+
+    def bodyweight_chart(page):
+        page.get_by_role("link", name="← İlerleme").click()
+        page.locator(".days .day").filter(has_text="Ab Wheel Roll-Out").click()
+        expect(page.locator(".page-head .muted")).to_have_text("Lower")
+        assert chip_names(page, "Makine") == ["Vücut ağırlığı · ağırlıksız"], chip_names(page, "Makine")
+        assert chip_names(page, "Ölçü") == ["Toplam tekrar", "En çok tekrar"], chip_names(page, "Ölçü")
+        expect(readout(page).locator(".readout-value")).to_have_text("22")
+        expect(readout(page).locator(".readout-sets")).to_have_text("12 · 10")
+        page.get_by_role("radio", name="En çok tekrar", exact=True).check()
+        assert record_values(page) == ["12", "10"], record_values(page)
+
+    def removed_exercise(page):
+        page.get_by_role("link", name="← İlerleme").click()
+        page.locator(".days .day").filter(has_text="Eski Hareket").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Eski Hareket")
+        assert chip_names(page, "Makine") == ["Eski makine · kg (silinmiş)"], chip_names(page, "Makine")
+        expect(page.locator("#progress-counter")).to_have_text("Tek kayıt var: ilerleme ikinci antrenmandan sonra hesaplanır.")
+        expect(page.locator(".chart")).to_have_count(0)
+        expect(page.locator(".chart-note")).to_have_text("Grafik ikinci antrenmandan sonra çizilir.")
+        assert record_values(page) == ["26,7 kg"], record_values(page)
+        page.goto(run.base_url + "/#/ilerleme/push/olmayan-hareket")
+        expect(page.get_by_role("heading", level=1)).to_have_text("İlerleme")
+
+    return [
+        ("İlerleme listesi günlere göre; programda olmayan kayıt ayrı grupta", list_grouped_by_day),
+        ("Makine sekmeleri, en son kullanılan önce; kademe makinesi kendi biriminde", level_chart),
+        ("kg makinesinde ölçüler: Tahmini 1TM, En ağır, Hacim; sayaç grafiğin üstünde", kg_chart),
+        ("Noktaya dokununca o günün setleri görünüyor; ok tuşlarıyla da geziliyor", tap_shows_sets),
+        ("Ağırlıksız makinede ölçüler: Toplam tekrar, En çok tekrar", bodyweight_chart),
+        ("Programda olmayan hareket ve silinmiş makine; tek kayıtta grafik yerine not", removed_exercise),
     ]
 
 
@@ -1561,6 +1746,7 @@ def main():
             run.flow("Makine silme ve ilerleme sayacı", machines_and_counter_steps(run))
             run.flow("Dönüşümlü hareket önerisi", rotation_steps(run))
             run.flow("Geçmiş ve düzeltme", history_steps(run))
+            run.flow("İlerleme grafikleri", progress_steps(run))
             run.flow("İnternetsiz çalışma", offline_steps(run))
             run.flow("Yeni sürüm ve güncelleme", update_steps(copy_url, app_copy), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))

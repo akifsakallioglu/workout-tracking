@@ -1,4 +1,5 @@
 import { assert, assertEqual, test } from './harness.js';
+import { lineChart, niceTicks } from '../js/chart.js';
 import {
   activeSession,
   backupFileName,
@@ -6,15 +7,19 @@ import {
   buildBackup,
   buildEntry,
   buildSession,
+  METRICS,
   collectSets,
   counterText,
   defaultEquipmentId,
   equipmentError,
   equipmentUseCount,
+  e1rm,
   evaluateCards,
+  exerciseSeries,
   formatDateTime,
   formatDay,
   formatDuration,
+  formatMetric,
   finishedSessions,
   formatSet,
   formatSets,
@@ -24,11 +29,14 @@ import {
   lastDoneDate,
   lastPerformance,
   liveProgressText,
+  machinesWithRecords,
+  metricValue,
   nextDayId,
   parseBackup,
   parseReps,
   parseWeight,
   progressCounter,
+  progressIndex,
   sessionSummary,
   suggestOption,
   suggestionText,
@@ -548,9 +556,11 @@ test('sayaç: başka makine, başka gün, atlanan hareket ve bitmemiş antrenman
 test('sayaç metni', () => {
   assertEqual(counterText(null), '');
   assertEqual(counterText({ count: 0, sinceFirst: true }), '');
-  assertEqual(counterText({ count: 3, sinceFirst: true }), 'İlk kayıttan beri 3 antrenman');
+  assertEqual(counterText({ count: 1, sinceFirst: true }), 'Henüz ilerleme yok');
+  assertEqual(counterText({ count: 3, sinceFirst: true }), 'Henüz ilerleme yok');
   assertEqual(counterText({ count: 0, sinceFirst: false }), 'Geçen antrenmanda ilerledin');
-  assertEqual(counterText({ count: 2, sinceFirst: false }), 'Son ilerlemeden beri 2 antrenman');
+  assertEqual(counterText({ count: 1, sinceFirst: false }), 'Son ilerleme 2 antrenman önce');
+  assertEqual(counterText({ count: 4, sinceFirst: false }), 'Son ilerleme 5 antrenman önce');
 });
 
 // ---------------------------------------------------------------- Dönüşümlü hareket önerisi
@@ -645,4 +655,148 @@ test('düzenlenen kaydın sonradan silinmiş makinesi kayıtta korunuyor', () =>
   assertEqual(evaluateCards([card], exercises).entries, [], 'düzenleme dışında arşivlenmiş makine kullanılmaz');
   const kept = evaluateCards([{ ...card, keepEquipmentId: 'k1' }], exercises).entries;
   assertEqual(kept.map((entry) => [entry.equipmentName, entry.sets.length]), [['Kablo', 2]]);
+});
+
+// ---------------------------------------------------------------- Grafikler
+
+test('ölçüler birime göre: kg, kademe ve ağırlıksız', () => {
+  assertEqual(METRICS.kg.map((metric) => metric.label), ['Tahmini 1TM', 'En ağır', 'Hacim']);
+  assertEqual(METRICS.level.map((metric) => metric.label), ['En yüksek kademe', 'Toplam tekrar']);
+  assertEqual(METRICS.none.map((metric) => metric.label), ['Toplam tekrar', 'En çok tekrar']);
+});
+
+test('ölçü değerleri: Epley 1TM en iyi setten, en ağır, hacim, toplam ve en çok tekrar', () => {
+  const kg = sets('40×12, 40×11, 40×10');
+  assertEqual(e1rm(40, 12), 56);
+  assertEqual(e1rm(100, 1), 100);
+  assertEqual(metricValue(kg, 'e1rm'), 56);
+  assertEqual(metricValue(sets('40×12, 45×8'), 'e1rm'), 57);
+  assertEqual(metricValue(sets('40×12, 45×8'), 'max'), 45);
+  assertEqual(metricValue(kg, 'volume'), 1320);
+  assertEqual(metricValue(sets('22.5×10'), 'e1rm'), 30);
+  assertEqual(metricValue(sets('10k×12, 11k×8'), 'max'), 11);
+  assertEqual(metricValue(sets('10k×12, 11k×8'), 'reps'), 20);
+  assertEqual(metricValue(sets('15, 14, 12'), 'reps'), 41);
+  assertEqual(metricValue(sets('15, 14, 12'), 'maxReps'), 15);
+  assertEqual(formatMetric(56, 'e1rm', 'kg'), '56 kg');
+  assertEqual(formatMetric(1320, 'volume', 'kg'), '1.320 kg');
+  assertEqual(formatMetric(22.5, 'max', 'kg'), '22,5 kg');
+  assertEqual(formatMetric(11, 'max', 'level'), '11k');
+  assertEqual(formatMetric(41, 'reps', 'none'), '41');
+});
+
+test('grafik serisi: yalnızca aynı gün + hareket + makinenin bitmiş kayıtları, eskiden yeniye', () => {
+  const sessions = [
+    calfSession('2', '2026-09-08T12:00:00.000Z', '45×10'),
+    calfSession('1', '2026-09-01T12:00:00.000Z', '40×12, 40×11'),
+    calfSession('b', '2026-09-10T12:00:00.000Z', '60×15', { equipmentId: 'makine-b' }),
+    calfSession('lower', '2026-09-11T12:00:00.000Z', '80×15', { dayId: 'lower' }),
+    session({ id: 'atlandi', date: '2026-09-12T12:00:00.000Z', dayId: 'legs', exerciseId: 'leg-press' }),
+    calfSession('devam', '2026-09-13T12:00:00.000Z', '90×20', { finished: false }),
+  ];
+  const series = exerciseSeries(sessions, CALF, 'max');
+  assertEqual(series.map((point) => [point.sessionId, point.value]), [['1', 40], ['2', 45]]);
+  assertEqual(series[0].sets, sets('40×12, 40×11'));
+  assertEqual(exerciseSeries(sessions, CALF, 'volume').map((point) => point.value), [920, 450]);
+  assertEqual(exerciseSeries(sessions, { ...CALF, equipmentId: 'makine-b' }, 'max').map((point) => point.sessionId), ['b']);
+});
+
+test('grafik sekmeleri: kaydı olan makineler, en son kullanılan önce; silinmiş makine adıyla', () => {
+  const program = {
+    exercises: {
+      'standing-calf-raise': {
+        name: 'Standing Calf Raise',
+        equipment: [
+          { id: 'makine', name: 'Calf makinesi', unit: 'kg' },
+          { id: 'eski', name: 'Eski makine', unit: 'level', archived: true },
+        ],
+      },
+    },
+    days: [],
+  };
+  const sessions = [
+    calfSession('1', '2026-09-01T12:00:00.000Z', '10k×12', { equipmentId: 'eski' }),
+    calfSession('2', '2026-09-08T12:00:00.000Z', '40×12'),
+    calfSession('3', '2026-09-15T12:00:00.000Z', '15', { equipmentId: 'kalkan' }),
+    calfSession('4', '2026-09-22T12:00:00.000Z', '60×15', { dayId: 'lower', equipmentId: 'lower-makine' }),
+  ];
+  sessions[0].entries[0].unit = 'level';
+  sessions[2].entries[0].unit = 'none';
+  const machines = machinesWithRecords(sessions, program, 'legs', 'standing-calf-raise');
+  assertEqual(
+    machines.map((machine) => [machine.equipmentId, machine.name, machine.unit, machine.archived]),
+    [
+      ['kalkan', 'kalkan', 'none', true],
+      ['makine', 'Calf makinesi', 'kg', false],
+      ['eski', 'Eski makine', 'level', true],
+    ],
+  );
+});
+
+test('ilerleme listesi: program günlerine göre, programdaki sırayla; programda olmayanlar ayrı', () => {
+  const program = {
+    exercises: { 'leg-press': { name: 'Leg Press', equipment: [] }, 'standing-calf-raise': { name: 'Standing Calf Raise', equipment: [] } },
+    days: [
+      { id: 'legs', name: 'Legs', items: [{ options: ['leg-press'] }, { options: ['standing-calf-raise'] }] },
+      { id: 'lower', name: 'Lower', items: [{ options: ['standing-calf-raise'] }] },
+    ],
+  };
+  const sessions = [
+    calfSession('1', '2026-09-01T12:00:00.000Z', '40×12'),
+    calfSession('2', '2026-09-08T12:00:00.000Z', '40×12', { equipmentId: 'makine-b' }),
+    session({ id: 'lp', date: '2026-09-09T12:00:00.000Z', dayId: 'legs', exerciseId: 'leg-press' }),
+    session({ id: 'eski', date: '2026-09-10T12:00:00.000Z', dayId: 'legs', exerciseId: 'hack-squat' }),
+    calfSession('devam', '2026-09-13T12:00:00.000Z', '90×20', { dayId: 'lower', finished: false }),
+  ];
+  const { days, other } = progressIndex(program, sessions);
+  assertEqual(
+    days.map((day) => [day.id, day.exercises.map((record) => [record.name, record.count, record.lastDate])]),
+    [
+      ['legs', [['Leg Press', 1, '2026-09-09T12:00:00.000Z'], ['Standing Calf Raise', 2, '2026-09-08T12:00:00.000Z']]],
+      ['lower', []],
+    ],
+  );
+  assertEqual(other.map((record) => [record.dayId, record.exerciseId, record.name]), [['legs', 'hack-squat', 'hack-squat']]);
+});
+
+test('grafik ekseni: yuvarlak değerler; tamsayı ölçüde kesirli çizgi yok', () => {
+  assertEqual(niceTicks(40, 56), [40, 45, 50, 55, 60]);
+  assertEqual(niceTicks(40, 40), [36, 38, 40, 42, 44]);
+  assertEqual(niceTicks(10, 12, true), [10, 11, 12]);
+  assertEqual(niceTicks(30, 41, true), [30, 35, 40, 45]);
+  assertEqual(niceTicks(1, 3), [1, 1.5, 2, 2.5, 3]);
+});
+
+test('grafik: her antrenman bir nokta; son nokta seçili; ok tuşları ve dokunma en yakın noktayı seçer', () => {
+  const chosen = [];
+  const svg = lineChart({
+    values: [40, 45, 42],
+    firstLabel: '1 Eyl',
+    lastLabel: '15 Eyl',
+    formatTick: String,
+    label: 'Deneme',
+    width: 320,
+    onSelect: (index) => chosen.push(index),
+  });
+  document.body.append(svg);
+  try {
+    const dots = [...svg.querySelectorAll('.dot')];
+    assertEqual(dots.length, 3);
+    const marker = svg.querySelector('.marker');
+    assertEqual([marker.getAttribute('cx'), marker.getAttribute('cy')], [dots[2].getAttribute('cx'), dots[2].getAttribute('cy')]);
+    assertEqual(svg.querySelector('.crosshair').getAttribute('x1'), dots[2].getAttribute('cx'));
+    assertEqual(chosen, [], 'ilk seçim bildirilmez');
+    svg.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+    svg.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home' }));
+    svg.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+    assertEqual(chosen, [1, 0], 'başta sola gidilmez');
+    const box = svg.getBoundingClientRect();
+    const scale = box.width / 320;
+    const lastX = Number(dots[2].getAttribute('cx'));
+    svg.dispatchEvent(new PointerEvent('pointerdown', { clientX: box.left + (lastX - 20) * scale, pointerId: 1 }));
+    assertEqual(chosen, [1, 0, 2], 'dokunulan yere en yakın nokta');
+    assertEqual([...svg.querySelectorAll('.tick')].map((node) => node.textContent).slice(-2), ['1 Eyl', '15 Eyl']);
+  } finally {
+    svg.remove();
+  }
 });

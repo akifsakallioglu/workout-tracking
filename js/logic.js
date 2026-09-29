@@ -322,11 +322,14 @@ export function progressCounter(sessions, { dayId, exerciseId, equipmentId }, be
   return { count: entries.length - 1 - lastProgress, sinceFirst: lastProgress === 0 };
 }
 
-// Kartta "Geçen sefer" satırının altındaki sayaç metni; gösterilecek bir şey yoksa boş metin.
+// Kartta "Geçen sefer" satırının altındaki sayaç metni: son ilerlemenin kaç antrenman önce olduğu.
+// Son antrenmanda ilerlendiyse "Geçen antrenmanda ilerledin"; hiç ilerleme yoksa "Henüz ilerleme
+// yok". Tek kayıt varken (karşılaştırılacak bir şey yokken) boş metin.
 export function counterText(counter) {
   if (!counter) return '';
-  if (counter.sinceFirst) return counter.count ? `İlk kayıttan beri ${counter.count} antrenman` : '';
-  return counter.count ? `Son ilerlemeden beri ${counter.count} antrenman` : 'Geçen antrenmanda ilerledin';
+  if (counter.sinceFirst) return counter.count ? 'Henüz ilerleme yok' : '';
+  const ago = counter.count + 1;
+  return ago === 1 ? 'Geçen antrenmanda ilerledin' : `Son ilerleme ${ago} antrenman önce`;
 }
 
 // Set girilirken görünen anlık durum: bir önceki kayda göre artış varsa ya da ilk kayıtsa.
@@ -515,3 +518,125 @@ const isSession = (session) =>
   Array.isArray(session.entries) &&
   session.entries.every(isEntry) &&
   (session.draft === undefined || (isObject(session.draft) && Array.isArray(session.draft.cards) && session.draft.cards.every(isDraftCard)));
+
+// ---------------------------------------------------------------- Grafikler
+
+// Birime göre seçilebilen ölçüler; ilki varsayılan.
+export const METRICS = {
+  kg: [
+    { id: 'e1rm', label: 'Tahmini 1TM' },
+    { id: 'max', label: 'En ağır' },
+    { id: 'volume', label: 'Hacim' },
+  ],
+  level: [
+    { id: 'max', label: 'En yüksek kademe' },
+    { id: 'reps', label: 'Toplam tekrar' },
+  ],
+  none: [
+    { id: 'reps', label: 'Toplam tekrar' },
+    { id: 'maxReps', label: 'En çok tekrar' },
+  ],
+};
+
+// Tahmini tek tekrar maksimumu (Epley): ağırlık × (1 + tekrar / 30); tek tekrarda ağırlığın kendisi.
+export function e1rm(weight, reps) {
+  return reps === 1 ? weight : weight * (1 + reps / 30);
+}
+
+// Bir antrenmandaki setlerden ölçünün değeri (bir ondalık basamağa yuvarlanır).
+export function metricValue(sets, metricId) {
+  const values = {
+    e1rm: () => Math.max(...sets.map((set) => e1rm(set.weight, set.reps))),
+    max: () => Math.max(...sets.map((set) => set.weight)),
+    volume: () => sets.reduce((total, set) => total + set.weight * set.reps, 0),
+    reps: () => sets.reduce((total, set) => total + set.reps, 0),
+    maxReps: () => Math.max(...sets.map((set) => set.reps)),
+  };
+  return Math.round(values[metricId]() * 10) / 10;
+}
+
+// Ölçünün birimiyle yazılışı: "56 kg", "1.305 kg", "11k", "45"
+export function formatMetric(value, metricId, unit) {
+  return metricId === 'reps' || metricId === 'maxReps' ? formatWeight(value) : formatWeightWithUnit(value, unit);
+}
+
+// Aynı gün + hareket + makinedeki bitmiş antrenmanlar, eskiden yeniye: grafiğin noktaları.
+export function exerciseSeries(sessions, { dayId, exerciseId, equipmentId }, metricId) {
+  return sessions
+    .filter((session) => session.finishedAt && session.dayId === dayId)
+    .map((session) => ({
+      session,
+      entry: session.entries.find(
+        (candidate) => candidate.exerciseId === exerciseId && candidate.equipmentId === equipmentId && candidate.sets.length > 0,
+      ),
+    }))
+    .filter(({ entry }) => entry)
+    .sort((a, b) => (a.session.startedAt < b.session.startedAt ? -1 : 1))
+    .map(({ session, entry }) => ({
+      sessionId: session.id,
+      date: session.startedAt,
+      value: metricValue(entry.sets, metricId),
+      sets: entry.sets,
+      unit: entry.unit,
+    }));
+}
+
+// Bir günde bir hareketin kaydı olan makineleri: en son kullanılan önce. Makine programdan
+// silinmişse (arşivlenmişse ya da tamamen kalkmışsa) adı kayıttan gelir.
+export function machinesWithRecords(sessions, program, dayId, exerciseId) {
+  const machines = new Map();
+  for (const session of sessions) {
+    if (!session.finishedAt || session.dayId !== dayId) continue;
+    for (const entry of session.entries) {
+      if (entry.exerciseId !== exerciseId || !entry.sets.length) continue;
+      const known = machines.get(entry.equipmentId);
+      if (!known || session.startedAt > known.lastDate) {
+        const equipment = program.exercises[exerciseId]?.equipment.find((option) => option.id === entry.equipmentId);
+        machines.set(entry.equipmentId, {
+          equipmentId: entry.equipmentId,
+          name: equipment?.name ?? entry.equipmentName,
+          unit: entry.unit,
+          archived: !equipment || Boolean(equipment.archived),
+          lastDate: session.startedAt,
+        });
+      }
+    }
+  }
+  return [...machines.values()].sort((a, b) => (a.lastDate < b.lastDate ? 1 : -1));
+}
+
+// İlerleme listesi: program günlerine göre gruplanmış, kaydı olan hareketler (programdaki sırayla).
+// Programdan çıkarılmış ya da günü silinmiş kayıtlar "other" grubunda.
+export function progressIndex(program, sessions) {
+  const records = new Map(); // "gün|hareket" → { dayId, dayName, exerciseId, name, count, lastDate }
+  for (const session of sessions) {
+    if (!session.finishedAt) continue;
+    for (const entry of session.entries) {
+      if (!entry.sets.length) continue;
+      const key = `${session.dayId}|${entry.exerciseId}`;
+      const record = records.get(key) ?? {
+        dayId: session.dayId,
+        dayName: session.dayName,
+        exerciseId: entry.exerciseId,
+        name: program.exercises[entry.exerciseId]?.name ?? entry.name,
+        count: 0,
+        lastDate: session.startedAt,
+      };
+      record.count++;
+      if (session.startedAt > record.lastDate) record.lastDate = session.startedAt;
+      records.set(key, record);
+    }
+  }
+  const listed = new Set();
+  const days = program.days.map((day) => {
+    const exerciseIds = [...new Set(day.items.flatMap((item) => item.options))];
+    const exercises = exerciseIds.map((exerciseId) => records.get(`${day.id}|${exerciseId}`)).filter(Boolean);
+    exercises.forEach((record) => listed.add(`${record.dayId}|${record.exerciseId}`));
+    return { id: day.id, name: day.name, exercises };
+  });
+  const other = [...records.entries()]
+    .filter(([key]) => !listed.has(key))
+    .map(([, record]) => record)
+    .sort((a, b) => a.dayName.localeCompare(b.dayName, 'tr') || a.name.localeCompare(b.name, 'tr'));
+  return { days, other };
+}
