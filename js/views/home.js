@@ -17,7 +17,10 @@ export async function renderHome(container, { flash }) {
   container.innerHTML = `
     <header class="page-head home-head">
       <h1>Antrenman Takibi</h1>
-      <a class="head-link" href="#/ayarlar">Ayarlar</a>
+      <nav class="head-links" aria-label="Diğer ekranlar">
+        <a class="head-link" href="#/gecmis">Geçmiş</a>
+        <a class="head-link" href="#/ayarlar">Ayarlar</a>
+      </nav>
     </header>
     ${flash ? `<p id="flash" class="flash" role="status">${escapeHtml(flash)}</p>` : ''}
     ${reminder ? `

@@ -17,10 +17,14 @@ import {
 } from '../logic.js';
 import { escapeHtml } from '../ui.js';
 
-export function cardHtml(card, index, { day, program, sessions, busy }) {
+// context: { day, program, sessions, busy, before, editing }. Geçmiş bir antrenman düzenlenirken
+// before o antrenmanın başlangıcıdır: "geçen sefer" ve sayaç ondan önceki kayıtlara göre hesaplanır.
+export function cardHtml(card, index, { day, program, sessions, busy, before = null, editing = false }) {
   const exercise = program.exercises[card.exerciseId];
-  const machines = exercise.equipment.filter((option) => !option.archived);
+  // Düzenlenen kaydın makinesi sonradan silindiyse (arşivlendiyse) o kart için seçilebilir kalır.
+  const machines = exercise.equipment.filter((option) => !option.archived || option.id === card.keepEquipmentId);
   const equipment = machines.find((option) => option.id === card.equipmentId);
+  const active = machines.filter((option) => !option.archived);
 
   return `
     <section class="card" data-card="${index}" aria-labelledby="card-title-${index}">
@@ -36,33 +40,33 @@ export function cardHtml(card, index, { day, program, sessions, busy }) {
             ${card.item.options.map((exerciseId) =>
               radioChip(`option-${index}`, exerciseId, program.exercises[exerciseId].name, exerciseId === card.exerciseId)).join('')}
           </div>
-          <p class="suggestion">${escapeHtml(suggestionText(suggestOption(sessions, day.id, card.item.options), program.exercises))}</p>
+          ${editing ? '' : `<p class="suggestion">${escapeHtml(suggestionText(suggestOption(sessions, day.id, card.item.options), program.exercises))}</p>`}
         </fieldset>` : ''}
 
       <fieldset class="machines">
         <legend>Makine</legend>
         ${machines.length ? '' : '<p class="muted no-machine">Bu hareket için henüz makine yok. Kullandığınız makineyi ekleyin.</p>'}
-        ${card.editingMachines && machines.length ? machineListHtml(machines, busy) : `
+        ${card.editingMachines && active.length ? machineListHtml(active, busy) : `
           <div class="chips">
             ${machines.map((option) =>
-              radioChip(`equipment-${index}`, option.id, `${option.name} · ${UNIT_LABELS[option.unit]}`, option.id === equipment?.id)).join('')}
+              radioChip(`equipment-${index}`, option.id, machineLabel(option), option.id === equipment?.id)).join('')}
             ${card.machineForm ? '' : '<button type="button" class="chip add" data-action="open-machine-form">+ Makine</button>'}
-            ${machines.length && !card.machineForm ? '<button type="button" class="chip edit" data-action="edit-machines">Düzenle</button>' : ''}
+            ${active.length && !card.machineForm ? '<button type="button" class="chip edit" data-action="edit-machines">Düzenle</button>' : ''}
           </div>`}
       </fieldset>
       ${card.machineForm ? machineFormHtml(card.machineForm, index, busy) : ''}
-      ${equipment ? logHtml(card, index, equipment, day, sessions) : ''}
+      ${equipment ? logHtml(card, index, equipment, day, sessions, before) : ''}
       <p class="message card-message" role="alert">${escapeHtml(card.message)}</p>
     </section>`;
 }
 
 // Seçili makinede geçen seferki performans, ağırlık kutusu ve tekrar kutuları.
-function logHtml(card, index, equipment, day, sessions) {
+function logHtml(card, index, equipment, day, sessions, before) {
   const { unit } = equipment;
-  const last = lastPerformance(sessions, { dayId: day.id, exerciseId: card.exerciseId, equipmentId: equipment.id });
+  const key = { dayId: day.id, exerciseId: card.exerciseId, equipmentId: equipment.id };
+  const last = lastPerformance(sessions, key, before);
   const weightInvalid = isInvalid(card, 'weight');
-
-  const counter = counterText(progressCounter(sessions, { dayId: day.id, exerciseId: card.exerciseId, equipmentId: equipment.id }));
+  const counter = counterText(progressCounter(sessions, key, before));
 
   return `
       <p class="last${last ? '' : ' empty'}">${last
@@ -100,6 +104,10 @@ function logHtml(card, index, equipment, day, sessions) {
 export function cardLiveText(card, equipment, last) {
   const { sets } = collectSets({ weight: card.weight, reps: card.reps }, equipment.unit);
   return liveProgressText(last?.sets ?? null, sets, equipment.unit);
+}
+
+function machineLabel(option) {
+  return `${option.name} · ${UNIT_LABELS[option.unit]}${option.archived ? ' (silinmiş)' : ''}`;
 }
 
 // Düzenleme modunda makineler: her birinin yanında "Sil".

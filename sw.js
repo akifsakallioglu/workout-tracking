@@ -1,7 +1,7 @@
 // Service worker: uygulama dosyalarını telefonda saklar; uygulama internetsiz de açılır.
 // Her yayında VERSION artırılır. Yeni bir dosya eklenince FILES listesine de yazılır
 // (uçtan uca test, listede eksik dosya kalmadığını denetler).
-const VERSION = '4';
+const VERSION = '5';
 const CACHE = `antrenman-${VERSION}`;
 const FILES = [
   './',
@@ -15,6 +15,7 @@ const FILES = [
   'js/store.js',
   'js/ui.js',
   'js/views/exercise-card.js',
+  'js/views/history.js',
   'js/views/home.js',
   'js/views/settings.js',
   'js/views/workout.js',

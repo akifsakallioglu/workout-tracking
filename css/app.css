@@ -398,9 +398,42 @@ a.button {
   gap: 12px;
 }
 
+.head-links {
+  display: flex;
+  gap: 16px;
+}
+
 .head-link {
   color: var(--accent);
   text-decoration: none;
+}
+
+/* Geçmiş */
+.empty-state {
+  margin-top: 8px;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry h2 {
+  font-size: 1rem;
+}
+
+.entry-sets {
+  margin: 6px 0 2px;
+  font-size: 1.0625rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-actions {
+  margin-top: 16px;
 }
 
 .reminder {

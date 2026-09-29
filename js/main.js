@@ -1,5 +1,7 @@
-// Açılış ve yönlendirme: #/ ana ekran, #/antrenman/<gün> antrenman ekranı, #/ayarlar ayarlar.
+// Açılış ve yönlendirme: #/ ana ekran, #/antrenman/<gün> antrenman ekranı, #/gecmis geçmiş,
+// #/gecmis/<kimlik> antrenmanın ayrıntısı, #/gecmis/<kimlik>/duzenle düzenleme, #/ayarlar ayarlar.
 import { initStore, waitForWrites } from './store.js';
+import { renderHistory, renderSessionDetail } from './views/history.js';
 import { renderHome } from './views/home.js';
 import { renderSettings } from './views/settings.js';
 import { renderWorkout } from './views/workout.js';
@@ -26,10 +28,15 @@ async function show() {
   const container = document.createElement('div');
   app.replaceChildren(container);
   const token = ++showCount;
-  const workout = location.hash.match(/^#\/antrenman\/([\w-]+)$/);
+  const hash = location.hash;
+  const workout = hash.match(/^#\/antrenman\/([\w-]+)$/);
+  const history = hash.match(/^#\/gecmis\/([\w-]+)(\/duzenle)?$/);
   let shown;
   if (workout) shown = await renderWorkout(container, { dayId: workout[1], navigate });
-  else if (location.hash === '#/ayarlar') shown = await renderSettings(container);
+  else if (history?.[2]) shown = await renderWorkout(container, { editSessionId: history[1], navigate });
+  else if (history) shown = await renderSessionDetail(container, { sessionId: history[1], navigate, flash: message });
+  else if (hash === '#/gecmis') shown = await renderHistory(container, { flash: message });
+  else if (hash === '#/ayarlar') shown = await renderSettings(container);
   else shown = await renderHome(container, { flash: message });
   // Bu ekran yüklenirken adres yeniden değiştiyse geç kalan ekran yenisinin yerine geçmesin.
   if (token === showCount) view = shown;

@@ -8,6 +8,7 @@ const numberFormat = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }
 const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
 const dayMonthYear = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
 const timeFormat = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
+const weekdayFormat = new Intl.DateTimeFormat('tr-TR', { weekday: 'short' });
 
 // Boş kutu → null, geçerli değer → sayı, geçersiz değer → NaN. "22,5" ve "22.5" ikisi de 22.5 olur.
 export function parseWeight(text) {
@@ -191,13 +192,16 @@ export function activeSession(sessions) {
 }
 
 // Kartlardaki değerleri denetler ve sorunsuz kartlardan kayıt girişleri üretir. Makinesi olmayan
-// ya da boş kart atlanır. Kart: { item, exerciseId, equipmentId, weight, reps }.
+// ya da boş kart atlanır. Kart: { item, exerciseId, equipmentId, weight, reps, keepEquipmentId? };
+// keepEquipmentId, geçmiş bir kayıt düzenlenirken sonradan silinmiş (arşivlenmiş) makinesidir.
 export function evaluateCards(cards, exercises) {
   const entries = [];
   let hasProblems = false;
   const results = cards.map((card) => {
     const exercise = exercises[card.exerciseId];
-    const equipment = exercise?.equipment.find((option) => option.id === card.equipmentId && !option.archived);
+    const equipment = exercise?.equipment.find(
+      (option) => option.id === card.equipmentId && (!option.archived || option.id === card.keepEquipmentId),
+    );
     if (!equipment) return { problems: [], message: '' };
     const { sets, problems } = collectSets({ weight: card.weight, reps: card.reps }, equipment.unit);
     if (problems.length) hasProblems = true;
@@ -296,10 +300,11 @@ export function hasProgress(previousSets, currentSets, unit) {
 
 // Aynı gün + hareket + makinede son ilerlemeden sonra gelen bitmiş antrenman sayısı. Hiç ilerleme
 // yoksa ilk kayıt başlangıç noktasıdır (sinceFirst). Kayıt yoksa null. Seti girilmemiş (atlanmış)
-// hareket ve bitmemiş antrenman sayılmaz; başka makine ya da gün sayacı etkilemez.
-export function progressCounter(sessions, { dayId, exerciseId, equipmentId }) {
+// hareket ve bitmemiş antrenman sayılmaz; başka makine ya da gün sayacı etkilemez. before verilirse
+// yalnızca o andan önce başlayan antrenmanlara bakılır (geçmiş bir antrenmanı düzenlerken).
+export function progressCounter(sessions, { dayId, exerciseId, equipmentId }, before = null) {
   const entries = sessions
-    .filter((session) => session.finishedAt && session.dayId === dayId)
+    .filter((session) => session.finishedAt && session.dayId === dayId && (!before || session.startedAt < before))
     .map((session) => ({
       startedAt: session.startedAt,
       entry: session.entries.find(
@@ -369,6 +374,35 @@ export function formatDate(iso, now = new Date()) {
 // "29 Eyl 18:05"
 export function formatDateTime(iso, now = new Date()) {
   return `${formatDate(iso, now)} ${timeFormat.format(new Date(iso))}`;
+}
+
+export function formatTime(iso) {
+  return timeFormat.format(new Date(iso));
+}
+
+// "29 Eyl Sal"; başka bir yıldaysa "29 Eyl 2025 Pzt"
+export function formatDay(iso, now = new Date()) {
+  const date = new Date(iso);
+  return `${formatDate(iso, now)} ${weekdayFormat.format(date)}`;
+}
+
+// "52 dk", "1 sa 5 dk", "2 sa"
+export function formatDuration(startIso, endIso) {
+  const minutes = Math.max(0, Math.round((new Date(endIso) - new Date(startIso)) / 60_000));
+  if (minutes < 60) return `${minutes} dk`;
+  const hours = Math.floor(minutes / 60);
+  return minutes % 60 ? `${hours} sa ${minutes % 60} dk` : `${hours} sa`;
+}
+
+// "6 hareket · 18 set"
+export function sessionSummary(session) {
+  const sets = session.entries.reduce((total, entry) => total + entry.sets.length, 0);
+  return `${session.entries.length} hareket · ${sets} set`;
+}
+
+// Bitmiş antrenmanlar, en yeniden eskiye.
+export function finishedSessions(sessions) {
+  return sessions.filter((session) => session.finishedAt).sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
 }
 
 // ---------------------------------------------------------------- Yedek

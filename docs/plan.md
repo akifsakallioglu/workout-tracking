@@ -294,6 +294,8 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 
 **Aşama 8: Geçmiş ve düzeltme**
 - Antrenman listesi, ayrıntı ekranı, düzenleme ve onaylı silme eklenir.
+- Geçmişe ana ekranın üstündeki "Geçmiş" bağlantısıyla gidilir. Listede tarih, gün, hareket ve set sayısı ile süre görünür.
+- Düzenlemede otomatik kaydetme yoktur; yarım bir düzeltme geçmişi bozmasın diye "Kaydet" ile kaydedilir ve kaydetmeden çıkarken onay sorulur. Set değerleri, makine ve dönüşümlü satırdaki hareket düzeltilebilir.
 - *Bitti sayılır:*
   - Geçmiş bir set düzeltilince "geçen sefer" ve sayaç buna göre değişiyor.
   - Silmeden önce onay soruluyor.

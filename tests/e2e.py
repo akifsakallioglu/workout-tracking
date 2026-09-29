@@ -1069,6 +1069,137 @@ def rotation_steps(run):
     ]
 
 
+# ---------------------------------------------------------------- Geçmiş ve düzeltme
+
+def iso_at(days_ago, plus_minutes=0):
+    moment = datetime.now(timezone.utc) - timedelta(days=days_ago) + timedelta(minutes=plus_minutes)
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def history_rows(page):
+    return page.locator(".history .day")
+
+
+def history_steps(run):
+    state = {}
+
+    def record(record_id, days_ago, equipment_id, reps_list):
+        return {
+            "id": record_id,
+            "dayId": "push",
+            "dayName": "Push",
+            "startedAt": iso_at(days_ago),
+            "finishedAt": iso_at(days_ago, 60),
+            "entries": [{
+                "exerciseId": "rope-pushdown",
+                "equipmentId": equipment_id,
+                "name": "Rope Pushdown",
+                "equipmentName": "Kablo",
+                "unit": "kg",
+                "options": ["rope-pushdown"],
+                "target": {"sets": 3, "repMin": 12, "repMax": 15},
+                "sets": [{"weight": 40, "reps": count} for count in reps_list],
+            }],
+        }
+
+    def list_newest_first(page):
+        page.goto(run.base_url + "/")
+        open_day(page, "push", "Push")
+        add_machine(card(page, "Rope Pushdown"), "Kablo", "kg")
+        kablo = stored_program(page)["exercises"]["rope-pushdown"]["equipment"][0]["id"]
+        page.evaluate(PUT_SCRIPT, ["sessions", record("gecmis-eski", 14, kablo, [12, 11, 10])])
+        page.evaluate(PUT_SCRIPT, ["sessions", record("gecmis-yeni", 7, kablo, [12, 11, 10])])
+        state["older_date"] = page.evaluate(
+            "(iso) => new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' }).format(new Date(iso))",
+            iso_at(14),
+        )
+        go_home(page)
+        page.get_by_role("link", name="Geçmiş").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Geçmiş")
+        expect(history_rows(page)).to_have_count(2)
+        expect(history_rows(page).first).to_have_attribute("href", "#/gecmis/gecmis-yeni")
+        expect(history_rows(page).first.locator(".muted")).to_have_text("1 hareket · 3 set · 1 sa")
+        page.screenshot(path=str(ARTIFACTS / "asama8-gecmis.png"))
+
+    def detail(page):
+        history_rows(page).first.click()
+        expect(page.get_by_role("heading", level=1)).to_contain_text("Push · ")
+        entry = page.locator(".entry")
+        expect(entry.locator("h2")).to_have_text("Rope Pushdown · Kablo")
+        expect(entry.locator(".entry-sets")).to_have_text("40 kg × 12 · 11 · 10")
+        expect(entry.locator(".muted")).to_have_text("Hedef 3 × 12–15")
+        page.screenshot(path=str(ARTIFACTS / "asama8-ayrinti.png"))
+
+    def edit_uses_earlier_records(page):
+        page.get_by_role("link", name="Düzenle").click()
+        expect(page.get_by_role("button", name="Kaydet")).to_be_visible()
+        rope = card(page, "Rope Pushdown")
+        expect(weight_input(rope)).to_have_value("40")
+        expect(reps(rope, 2)).to_have_value("11")
+        expect(last_time(rope)).to_have_text(f"Geçen sefer — {state['older_date']}: 40 kg × 12 · 11 · 10")
+        expect(counter_line(rope)).to_have_count(0)
+        reps(rope, 2).fill("12")
+        expect(live_progress(rope)).to_have_text("Bu antrenmanda ilerledin ✓")
+        page.screenshot(path=str(ARTIFACTS / "asama8-duzenleme.png"))
+        page.get_by_role("button", name="Kaydet").click()
+        expect(page.locator("#flash")).to_have_text("Değişiklikler kaydedildi ✓")
+        expect(page.locator(".entry .entry-sets")).to_have_text("40 kg × 12 · 12 · 10")
+
+    def correction_updates_today(page):
+        page.get_by_role("link", name="← Geçmiş").click()
+        page.get_by_role("link", name="← Günler").click()
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        expect(last_time(rope)).to_contain_text("40 kg × 12 · 12 · 10")
+        expect(counter_line(rope)).to_have_text("Geçen antrenmanda ilerledin")
+        go_home(page)
+
+    def validation_and_leave_guard(page):
+        page.get_by_role("link", name="Geçmiş").click()
+        history_rows(page).nth(1).click()
+        page.get_by_role("link", name="Düzenle").click()
+        rope = card(page, "Rope Pushdown")
+        log_sets(rope, "", ["", "", ""])
+        page.get_by_role("button", name="Kaydet").click()
+        expect(workout_message(page)).to_contain_text("En az bir hareket için set girin.")
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.get_by_role("link", name="← Vazgeç").click()
+        expect(page.get_by_role("button", name="Kaydet")).to_be_visible()
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("link", name="← Vazgeç").click()
+        expect(page.locator(".entry .entry-sets")).to_have_text("40 kg × 12 · 11 · 10")
+
+    def change_machine(page):
+        page.get_by_role("link", name="Düzenle").click()
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo 2", "kg")
+        expect(reps(rope, 1)).to_have_value("12")
+        page.get_by_role("button", name="Kaydet").click()
+        expect(page.locator(".entry h2")).to_have_text("Rope Pushdown · Kablo 2")
+        older = next(session for session in sessions(page) if session["id"] == "gecmis-eski")
+        assert older["entries"][0]["equipmentName"] == "Kablo 2", older["entries"][0]
+
+    def delete_with_confirmation(page):
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.get_by_role("button", name="Sil").click()
+        expect(page.locator(".entry")).to_have_count(1)
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Sil").click()
+        expect(page.locator("#flash")).to_have_text("Antrenman silindi.")
+        expect(history_rows(page)).to_have_count(1)
+        assert [session["id"] for session in sessions(page)] == ["gecmis-yeni"], sessions(page)
+
+    return [
+        ("Geçmiş listesi en yeniden eskiye; hareket, set ve süre", list_newest_first),
+        ("Ayrıntı: hareket, makine, setler ve hedef", detail),
+        ("Düzenlemede 'geçen sefer' o antrenmandan öncekine göre; değişiklik kaydediliyor", edit_uses_earlier_records),
+        ("Düzeltmeden sonra bugünün 'geçen sefer' ve sayacı değişiyor", correction_updates_today),
+        ("Boş kayıt uyarısı; kaydetmeden çıkarken onay", validation_and_leave_guard),
+        ("Düzenlerken makine değiştiriliyor", change_machine),
+        ("Silmeden önce onay soruluyor", delete_with_confirmation),
+    ]
+
+
 # ---------------------------------------------------------------- İnternetsiz çalışma ve güncelleme
 
 WAIT_FOR_CONTROLLER = "navigator.serviceWorker.controller !== null"
@@ -1429,6 +1560,7 @@ def main():
             run.flow("Yedekleme", backup_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Makine silme ve ilerleme sayacı", machines_and_counter_steps(run))
             run.flow("Dönüşümlü hareket önerisi", rotation_steps(run))
+            run.flow("Geçmiş ve düzeltme", history_steps(run))
             run.flow("İnternetsiz çalışma", offline_steps(run))
             run.flow("Yeni sürüm ve güncelleme", update_steps(copy_url, app_copy), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))

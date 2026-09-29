@@ -1,6 +1,8 @@
 // Antrenman ekranı: günün bütün hareketleri kartlarla girilir. İlk değer yazılınca antrenman
 // "devam ediyor" olarak kaydedilir ve her değişiklik kendiliğinden kaydedilir; "Bitir" antrenmanı
 // bitirir, "İptal" siler. Seti girilmeyen hareket atlanır ve kayda yazılmaz.
+// Düzenleme modu (editSessionId): geçmiş bir antrenman aynı kartlarla düzeltilir; otomatik kaydetme
+// yoktur, "Kaydet" ile kaydedilir. "Geçen sefer" ve sayaç o antrenmandan önceki kayıtlara göredir.
 import {
   activeSession,
   buildSession,
@@ -9,6 +11,8 @@ import {
   equipmentUseCount,
   evaluateCards,
   formatDateTime,
+  formatDay,
+  formatWeight,
   lastPerformance,
   suggestOption,
   usedEquipmentIds,
@@ -64,16 +68,30 @@ const STATUS_TEXT = {
     error: 'Makine silinemedi.',
     keep: 'makine listede duruyor.',
   },
+  edit: {
+    saving: 'Kaydediliyor…',
+    saved: 'Kaydedildi ✓',
+    error: 'Değişiklikler kaydedilemedi.',
+    keep: 'değerler ekranda duruyor.',
+  },
 };
 
-export async function renderWorkout(container, { dayId, navigate }) {
+export async function renderWorkout(container, { dayId, navigate, editSessionId = null }) {
   const [program, sessions] = await Promise.all([loadProgram(), loadSessions()]);
-  const day = program.days.find((candidate) => candidate.id === dayId);
+  const editing = editSessionId ? sessions.find((session) => session.id === editSessionId && session.finishedAt) : null;
+  if (editSessionId && !editing) {
+    navigate('#/gecmis');
+    return {};
+  }
+  // Düzenlenen antrenmanın günü kayıttaki hâlidir (program sonradan değişmiş olabilir).
+  const day = editing
+    ? { id: editing.dayId, name: editing.dayName }
+    : program.days.find((candidate) => candidate.id === dayId);
   if (!day) {
     navigate('#/');
     return {};
   }
-  const active = activeSession(sessions);
+  const active = editing ? null : activeSession(sessions);
   if (active && active.dayId !== day.id) return renderConflict(container, { active, day, program, navigate });
 
   const available = (exercise, equipmentId) =>
@@ -106,14 +124,30 @@ export async function renderWorkout(container, { dayId, navigate }) {
       reps: [...draft.reps],
     };
   };
+  // Geçmiş bir kaydın girişinden kart: hedef kayıttaki kopyadır; makine sonradan silindiyse korunur.
+  const cardFromEntry = (entry) => ({
+    ...newCard({ id: `${day.id}-${entry.options.join('-')}`, options: entry.options, ...entry.target }),
+    exerciseId: entry.exerciseId,
+    equipmentId: entry.equipmentId,
+    keepEquipmentId: entry.equipmentId,
+    weight: entry.unit === 'none' ? '' : formatWeight(entry.sets[0].weight),
+    reps: entry.sets.map((set) => String(set.reps)),
+  });
+
+  let cards;
+  if (editing) cards = editing.entries.map(cardFromEntry);
+  else if (active?.draft) cards = active.draft.cards.map(cardFromDraft);
+  else cards = day.items.map(newCard);
 
   const state = {
     program,
     sessions,
-    sessionId: active?.id ?? createId(),
-    startedAt: active?.startedAt ?? new Date().toISOString(),
+    editing, // düzenlenen geçmiş antrenman; yoksa null
+    dirty: false, // düzenleme modunda kaydedilmemiş değişiklik var mı
+    sessionId: editing?.id ?? active?.id ?? createId(),
+    startedAt: editing?.startedAt ?? active?.startedAt ?? new Date().toISOString(),
     persisted: Boolean(active), // antrenman veritabanında "devam ediyor" olarak var mı
-    cards: active?.draft ? active.draft.cards.map(cardFromDraft) : day.items.map(newCard),
+    cards,
     message: '',
     busy: false,
     ending: false, // bitirme ya da silme sürüyor: taslak artık kaydedilmez
@@ -127,17 +161,32 @@ export async function renderWorkout(container, { dayId, navigate }) {
   const exerciseOf = (card) => state.program.exercises[card.exerciseId];
   // Seçili makine; hareketin henüz makinesi yoksa undefined.
   const equipmentOf = (card) =>
-    exerciseOf(card).equipment.find((equipment) => equipment.id === card.equipmentId && !equipment.archived);
-  const cardContext = () => ({ day, program: state.program, sessions: state.sessions, busy: state.busy });
+    exerciseOf(card).equipment.find(
+      (equipment) => equipment.id === card.equipmentId && (!equipment.archived || equipment.id === card.keepEquipmentId),
+    );
+  const before = editing?.startedAt ?? null;
+  const cardContext = () => ({
+    day,
+    program: state.program,
+    sessions: state.sessions,
+    busy: state.busy,
+    before,
+    editing: Boolean(editing),
+  });
   const hasValues = () => state.cards.some((card) => card.weight.trim() || card.reps.some((value) => value.trim()));
 
   function render() {
+    const disabled = state.busy ? ' disabled' : '';
     container.innerHTML = `
       <header class="topbar">
         <div class="topbar-row">
-          <a class="back" href="#/">← Günler</a>
-          <h1>${escapeHtml(day.name)}</h1>
-          <button type="button" class="button primary" data-action="finish"${state.busy ? ' disabled' : ''}>Bitir</button>
+          ${editing
+            ? `<a class="back" href="#/gecmis/${escapeHtml(editing.id)}">← Vazgeç</a>
+               <h1>${escapeHtml(day.name)} · ${formatDay(editing.startedAt)}</h1>
+               <button type="button" class="button primary" data-action="save-edit"${disabled}>Kaydet</button>`
+            : `<a class="back" href="#/">← Günler</a>
+               <h1>${escapeHtml(day.name)}</h1>
+               <button type="button" class="button primary" data-action="finish"${disabled}>Bitir</button>`}
         </div>
         <div id="save-status" class="save-status" role="status"></div>
       </header>
@@ -146,9 +195,10 @@ export async function renderWorkout(container, { dayId, navigate }) {
       <div class="cards">
         ${state.cards.map((card, index) => cardHtml(card, index, cardContext())).join('')}
       </div>
-      <div class="page-actions">
-        <button type="button" class="button danger" data-action="cancel"${state.busy ? ' disabled' : ''}>Antrenmanı iptal et</button>
-      </div>`;
+      ${editing ? '' : `
+        <div class="page-actions">
+          <button type="button" class="button danger" data-action="cancel"${disabled}>Antrenmanı iptal et</button>
+        </div>`}`;
     renderStatus();
   }
 
@@ -192,6 +242,10 @@ export async function renderWorkout(container, { dayId, navigate }) {
   // Hiç değer girilmemiş ve henüz kaydedilmemiş antrenman kaydedilmez (yalnızca göz atılmıştır).
   // context, kayıt durumunda hangi metnin görüneceğini belirler.
   function requestSave(immediate = false, context = 'session') {
+    if (state.editing) {
+      state.dirty = true; // düzenleme modunda otomatik kaydetme yok; "Kaydet" beklenir
+      return;
+    }
     if (state.saved || state.ending) return;
     if (!state.persisted && !hasValues()) return;
     clearTimeout(state.timer);
@@ -207,7 +261,7 @@ export async function renderWorkout(container, { dayId, navigate }) {
   async function saveNow(context = 'session') {
     clearTimeout(state.timer);
     state.timer = null;
-    if (state.saved || state.ending || (!state.persisted && !hasValues())) {
+    if (state.editing || state.saved || state.ending || (!state.persisted && !hasValues())) {
       renderStatus();
       return;
     }
@@ -284,6 +338,40 @@ export async function renderWorkout(container, { dayId, navigate }) {
       console.warn('Antrenman bitirilemedi', error);
       state.retry = finish;
       state.ending = false;
+      state.busy = false;
+      render();
+    }
+  }
+
+  // Düzenleme modu: değerler denetlenir, antrenmanın girişleri yenileriyle değiştirilir. Tarih ve gün
+  // aynı kalır; hedefler kayıttaki kopyalardır.
+  async function saveEdit() {
+    if (state.busy) return;
+    const { results, entries, hasProblems } = evaluateCards(state.cards, state.program.exercises);
+    state.cards.forEach((card, index) => {
+      card.problems = results[index].problems;
+      card.message = results[index].message;
+    });
+    if (hasProblems) state.message = 'Bazı hareketlerde düzeltilmesi gereken değerler var.';
+    else if (!entries.length) {
+      state.message = 'En az bir hareket için set girin. Antrenmanı tamamen silmek için ayrıntı ekranındaki "Sil"i kullanın.';
+    } else state.message = '';
+    if (state.message) {
+      render();
+      container.querySelector('[aria-invalid="true"]')?.focus();
+      return;
+    }
+
+    state.writeContext = 'edit';
+    state.busy = true;
+    render();
+    try {
+      await saveSession({ ...editing, entries });
+      state.saved = true;
+      navigate(`#/gecmis/${editing.id}`, 'Değişiklikler kaydedildi ✓');
+    } catch (error) {
+      console.warn('Değişiklikler kaydedilemedi', error);
+      state.retry = saveEdit;
       state.busy = false;
       render();
     }
@@ -446,7 +534,7 @@ export async function renderWorkout(container, { dayId, navigate }) {
     const live = cardElement.querySelector('.progress-live');
     if (equipment && live) {
       const key = { dayId: day.id, exerciseId: card.exerciseId, equipmentId: equipment.id };
-      live.textContent = cardLiveText(card, equipment, lastPerformance(state.sessions, key));
+      live.textContent = cardLiveText(card, equipment, lastPerformance(state.sessions, key, before));
     }
     requestSave();
   });
@@ -492,6 +580,9 @@ export async function renderWorkout(container, { dayId, navigate }) {
     switch (actionElement.dataset.action) {
       case 'finish':
         finish();
+        break;
+      case 'save-edit':
+        saveEdit();
         break;
       case 'cancel':
         cancel();
@@ -549,13 +640,17 @@ export async function renderWorkout(container, { dayId, navigate }) {
     // başarısız olduysa kullanıcıya sorulur.
     beforeLeave() {
       if (state.saved) return true;
+      if (state.editing) {
+        return !state.dirty || confirm('Değişiklikler kaydedilmedi ve kaybolacak. Çıkmak istiyor musunuz?');
+      }
       const failed = state.status.state === 'error';
       flush();
       return !failed || confirm('Son değişiklikler kaydedilemedi ve kaybolabilir. Yine de çıkmak istiyor musunuz?');
     },
     flush,
     // Sayfa kapanırken ya da yenilenirken tarayıcı uyarı göstersin mi.
-    hasUnsavedChanges: () => !state.saved && (state.timer !== null || hasPendingWrites() || state.status.state === 'error'),
+    hasUnsavedChanges: () =>
+      !state.saved && (state.editing ? state.dirty : state.timer !== null || hasPendingWrites() || state.status.state === 'error'),
     destroy() {
       clearTimeout(state.timer);
       unsubscribe();

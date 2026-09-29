@@ -13,6 +13,9 @@ import {
   equipmentUseCount,
   evaluateCards,
   formatDateTime,
+  formatDay,
+  formatDuration,
+  finishedSessions,
   formatSet,
   formatSets,
   formatTarget,
@@ -26,6 +29,7 @@ import {
   parseReps,
   parseWeight,
   progressCounter,
+  sessionSummary,
   suggestOption,
   suggestionText,
   upgradeProgram,
@@ -595,4 +599,50 @@ test('öneri metni', () => {
     suggestionText({ exerciseId: 'reverse-curl', last: { exerciseId: 'wrist-curl', date: '2026-09-22T12:00:00.000Z' } }, exercises, now),
     'Son yapılan: Wrist Curl · 22 Eyl · Sıradaki: Reverse Curl',
   );
+});
+
+// ---------------------------------------------------------------- Geçmiş ve düzeltme
+
+test('geçmiş: bitmiş antrenmanlar en yeniden eskiye; süre, gün ve özet biçimi', () => {
+  const sessions = [
+    session({ id: 'eski', date: '2026-09-15T12:00:00.000Z' }),
+    session({ id: 'devam', date: '2026-09-29T12:00:00.000Z', finished: false }),
+    session({ id: 'yeni', date: '2026-09-22T12:00:00.000Z', sets: [{ weight: 50, reps: 12 }, { weight: 50, reps: 11 }] }),
+  ];
+  assertEqual(finishedSessions(sessions).map((item) => item.id), ['yeni', 'eski']);
+  assertEqual(sessionSummary(finishedSessions(sessions)[0]), '1 hareket · 2 set');
+  assertEqual(formatDuration('2026-09-29T15:00:00.000Z', '2026-09-29T15:52:10.000Z'), '52 dk');
+  assertEqual(formatDuration('2026-09-29T15:00:00.000Z', '2026-09-29T16:05:00.000Z'), '1 sa 5 dk');
+  assertEqual(formatDuration('2026-09-29T15:00:00.000Z', '2026-09-29T17:00:00.000Z'), '2 sa');
+  const day = formatDay('2026-09-29T12:00:00.000Z', new Date('2026-10-01T00:00:00.000Z'));
+  assert(/^29 Eyl \S+$/.test(day), day);
+});
+
+test('geçmiş bir antrenman düzenlenirken sayaç o antrenmandan önceki kayıtlara göre', () => {
+  const calf = (id, date, text) =>
+    session({ id, date, dayId: 'legs', exerciseId: 'standing-calf-raise', equipmentId: 'makine', sets: sets(text) });
+  const all = [
+    calf('1', '2026-09-01T12:00:00.000Z', '40×12'),
+    calf('2', '2026-09-08T12:00:00.000Z', '40×12'),
+    calf('3', '2026-09-15T12:00:00.000Z', '45×10'),
+  ];
+  assertEqual(progressCounter(all, CALF), { count: 0, sinceFirst: false });
+  assertEqual(progressCounter(all, CALF, '2026-09-15T12:00:00.000Z'), { count: 1, sinceFirst: true });
+  assertEqual(lastPerformance(all, CALF, '2026-09-15T12:00:00.000Z').sessionId, '2');
+});
+
+test('düzenlenen kaydın sonradan silinmiş makinesi kayıtta korunuyor', () => {
+  const exercises = {
+    'rope-pushdown': { name: 'Rope Pushdown', equipment: [{ id: 'k1', name: 'Kablo', unit: 'kg', archived: true }] },
+  };
+  const card = {
+    item: { id: 'push-rope-pushdown', options: ['rope-pushdown'], sets: 3, repMin: 12, repMax: 15 },
+    exerciseId: 'rope-pushdown',
+    equipmentId: 'k1',
+    weight: '50',
+    reps: ['12', '12', ''],
+  };
+  assertEqual(evaluateCards([card], exercises).entries, [], 'düzenleme dışında arşivlenmiş makine kullanılmaz');
+  const kept = evaluateCards([{ ...card, keepEquipmentId: 'k1' }], exercises).entries;
+  assertEqual(kept.map((entry) => [entry.equipmentName, entry.sets.length]), [['Kablo', 2]]);
 });

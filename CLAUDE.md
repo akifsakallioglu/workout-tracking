@@ -24,7 +24,8 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 
 ## Ekranlar
 - Renkler uygulama simgesinden gelir (koyu yeşil `#034425`, krem `#faf1e1`, turuncu `#f06b29`); hepsi `css/app.css` başındaki değişkenlerde, açık ve koyu tema için ayrı. Yazı renkleri zemine karşı en az 4,5:1 karşıtlıkta seçilir.
-- `js/main.js` yönlendirir: `#/` ana ekran (`views/home.js`), `#/antrenman/<gün>` antrenman ekranı (`views/workout.js`), `#/ayarlar` ayarlar (`views/settings.js`). Kart `views/exercise-card.js` içindedir (Aşama 8'deki geçmiş düzenlemede de kullanılacak).
+- `js/main.js` yönlendirir: `#/` ana ekran (`views/home.js`), `#/antrenman/<gün>` antrenman ekranı (`views/workout.js`), `#/gecmis` ve `#/gecmis/<kimlik>` geçmiş listesi ve ayrıntısı (`views/history.js`), `#/gecmis/<kimlik>/duzenle` düzenleme (`views/workout.js`, düzenleme modu), `#/ayarlar` ayarlar (`views/settings.js`). Kart `views/exercise-card.js` içindedir.
+- Geçmiş düzenleme: aynı kartlar; otomatik kaydetme yok, "Kaydet" ile kaydedilir, kaydedilmemiş değişiklikle çıkarken onay sorulur. "Geçen sefer", sayaç ve anlık ilerleme o antrenmandan önceki kayıtlara göredir (`before`). Tarih, gün ve hedefler kayıttaki hâliyle kalır; kaydın makinesi sonradan silindiyse "(silinmiş)" olarak seçilebilir kalır (`keepEquipmentId`). Silme onay alır.
 - Ekranlar `{ beforeLeave?, flush?, hasUnsavedChanges?, destroy? }` döndürür; `main.js` ekran değişmeden önce `beforeLeave`, sayfa kapanırken `flush` ve `hasUnsavedChanges` çağırır.
 - Devam eden antrenman, ilk değer girilince `finishedAt: null` ve `draft.cards` (ham kutu değerleri, seçili hareket ve makine, başlarken kopyalanan hedef) ile kaydedilir. "Bitir" aynı kaydı `entries` ile bitmiş hâle getirir, "İptal" siler. Aynı anda tek devam eden antrenman olur; başka gün açılınca "devam et / bitir / sil" ekranı çıkar.
 
@@ -59,4 +60,4 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Yeni kararlar bu dosyaya işlenir.
 
 ## Aşamalar
-0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma ✓ (telefonda uçak modu denemesi kullanıcıda) · 6 İlerleme sayacı ✓ (makine silme ve yeni simge de) · 7 Dönüşümlü hareket önerisi ✓ · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
+0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma ✓ (telefonda uçak modu denemesi kullanıcıda) · 6 İlerleme sayacı ✓ (makine silme ve yeni simge de) · 7 Dönüşümlü hareket önerisi ✓ · 8 Geçmiş ve düzeltme ✓ · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
