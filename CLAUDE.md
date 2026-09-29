@@ -36,7 +36,8 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - `sw.js` uygulama dosyalarını sürümlü önbellekte saklar (önce önbellek). **Her yayında `VERSION` artırılır**; yeni dosya eklenince `FILES` listesine yazılır (uçtan uca test eksik ya da fazla dosyayı yakalar).
 - Bilgisayarda (localhost/127.0.0.1) service worker kapalıdır, yalnızca adreste `?sw=1` varsa çalışır.
 - Yeni sürüm hazır olunca "Yeni sürüm var: Güncelle" bandı çıkar; "Güncelle" bekleyen yazmaları bitirir, yazma başarısızsa güncellemez.
-- Yayın: GitHub Pages (`main` dalı, kök klasör). Push yalnızca kullanıcının onayıyla. Simgeler `tools/render_icons.py` ile SVG'den üretilir.
+- Yayın: GitHub Pages (`main` dalı, kök klasör), https://akifsakallioglu.github.io/workout-tracking/ — depo: https://github.com/akifsakallioglu/workout-tracking. Her push siteyi günceller; telefondaki uygulama ise yalnızca `VERSION` değişince yeni sürüme geçer. Push yalnızca kullanıcının onayıyla. Simgeler `tools/render_icons.py` ile SVG'den üretilir.
+- Bu depoda commit e-postası GitHub'ın gizli adresidir (`44166014+akifsakallioglu@users.noreply.github.com`, yerel git ayarı).
 
 ## Yedek
 - Biçim: `{ app: "antrenman-takibi", backupVersion: 1, exportedAt, program, sessions }`; devam eden antrenman dahil. Cihaza özel ayarlar (`meta/settings`: `lastBackupAt`) yedeğe girmez.
@@ -55,4 +56,4 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Yeni kararlar bu dosyaya işlenir.
 
 ## Aşamalar
-0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma (kod ✓, GitHub Pages yayını kullanıcı onayı bekliyor) · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
+0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma ✓ (telefonda uçak modu denemesi kullanıcıda) · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
