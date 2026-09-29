@@ -1,5 +1,5 @@
 // Veri erişim katmanı: ekranlar veritabanına yalnızca buradan ulaşır.
-import { get, getAll, openDatabase, put } from './db.js';
+import { get, getAll, openDatabase, put, remove } from './db.js';
 import { upgradeProgram, usedEquipmentIds } from './logic.js';
 import { program as seedProgram } from './seed.js';
 
@@ -16,6 +16,7 @@ export async function initStore() {
 // İlk açılışta başlangıç programı veritabanına yazılır; sonra hep veritabanındaki hâli kullanılır.
 // Kayıtlı program başlangıç programının eski bir sürümündense yükseltilip yeniden yazılır.
 export async function loadProgram() {
+  await queue; // okumalar, daha önce istenen bütün yazmaları görür
   const stored = await get(db, 'meta', 'program');
   let program;
   if (stored) {
@@ -30,7 +31,8 @@ export async function loadProgram() {
   return program;
 }
 
-export function loadSessions() {
+export async function loadSessions() {
+  await queue; // örneğin ekrandan çıkarken başlatılan taslak yazması bitmeden okunmasın
   return getAll(db, 'sessions');
 }
 
@@ -40,6 +42,15 @@ export function saveProgram(program) {
 
 export function saveSession(session) {
   return trackedWrite(() => put(db, 'sessions', session));
+}
+
+export function deleteSession(id) {
+  return trackedWrite(() => remove(db, 'sessions', id));
+}
+
+// Sırada bekleyen ya da yazılmakta olan bir değişiklik var mı.
+export function hasPendingWrites() {
+  return pending > 0;
 }
 
 // Tüm yazmalar tek sıradan geçer: aynı anda tek yazma olur.

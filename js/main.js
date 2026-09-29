@@ -4,7 +4,7 @@ import { renderHome } from './views/home.js';
 import { renderWorkout } from './views/workout.js';
 
 const app = document.getElementById('app');
-let view = null; // { hasUnsavedChanges?(), destroy?() }
+let view = null; // { beforeLeave?(), flush?(), hasUnsavedChanges?(), destroy?() }
 let shownHash = null;
 let flash = '';
 let showCount = 0;
@@ -34,16 +34,20 @@ async function show() {
   else shown?.destroy?.();
 }
 
+// Ekran değişmeden önce açık ekran bekleyen değişikliğini yazar; gerekirse kullanıcıya sorar.
 window.addEventListener('hashchange', () => {
   if (location.hash === shownHash) return; // aşağıda geri alınan adres
-  if (view?.hasUnsavedChanges?.() && !confirm('Girdiğiniz değerler kaydedilmedi ve silinecek. Çıkmak istiyor musunuz?')) {
+  if (view?.beforeLeave && !view.beforeLeave()) {
     location.hash = shownHash;
     return;
   }
   show();
 });
 
+// Sayfa kapanırken ya da yenilenirken: bekleyen değişiklik hemen yazılmaya başlar; bekleyen ya da
+// başarısız bir yazma varsa tarayıcı uyarı gösterir (her tarayıcı desteklemez).
 window.addEventListener('beforeunload', (event) => {
+  view?.flush?.();
   if (view?.hasUnsavedChanges?.()) {
     event.preventDefault();
     event.returnValue = '';

@@ -357,6 +357,7 @@ def push_workout_steps(run):
         expect(last_time(rope)).to_have_text("Bu makinede önceki kayıt yok")
         expect(weight_label(rope)).to_have_text("Ağırlık (kg)")
         add_machine(card(page, "Machine Chest Press"), "Göğüs Pres", "kg")
+        expect(save_status(page)).to_have_text("Makine eklendi ✓")
         page.reload()
         expect(page.locator(".topbar h1")).to_have_text("Push")
         assert machine_names(card(page, "Rope Pushdown")) == ["Kablo · kg"], "Eklenen makine kaydedilmeliydi"
@@ -389,7 +390,7 @@ def push_workout_steps(run):
         reps(chest, 1).fill("12")
         expect(reps(chest, 3)).not_to_have_attribute("aria-invalid", "true")
         log_sets(chest, "", [""])
-        assert sessions(page) == [], "Hatalı değerlerle kayıt yapılmamalıydı"
+        assert not any(session["finishedAt"] for session in sessions(page)), "Hatalı değerlerle antrenman bitmemeliydi"
 
     def machine_form_validation(page):
         rope = card(page, "Rope Pushdown")
@@ -420,11 +421,12 @@ def push_workout_steps(run):
         add_machine(fly, "Kablo 3", "kg")
         expect(radio(fly, "Kablo 3 · kg")).to_be_checked()
         assert machine_names(rope) == ["Kablo · kg", "Kablo 2 · kademe"], machine_names(rope)
+        expect(save_status(page)).to_have_text("Makine eklendi ✓")
         page.reload()
         expect(page.locator(".topbar h1")).to_have_text("Push")
         rope = card(page, "Rope Pushdown")
         assert machine_names(rope) == ["Kablo · kg", "Kablo 2 · kademe"], "İkinci makine de kaydedilmeliydi"
-        expect(radio(rope, "Kablo · kg")).to_be_checked()
+        expect(radio(rope, "Kablo 2 · kademe")).to_be_checked()  # devam eden antrenmanda seçim korunur
         expect(radio(card(page, "Cable Fly"), "Kablo 3 · kg")).to_be_checked()
 
     def add_and_remove_sets(page):
@@ -444,11 +446,12 @@ def push_workout_steps(run):
         radio(card(page, "Rope Pushdown"), "Kablo 2 · kademe").check()
         log_sets(card(page, "Rope Pushdown"), "10", ["12", "12", "10"])
         log_sets(card(page, "Machine Chest Press"), "50", ["12", "11", "10"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
         page.evaluate("window.__failWrites = true")
         finish(page)
-        expect(save_status(page)).to_contain_text("Kaydedilemedi.")
+        expect(save_status(page)).to_contain_text("Antrenman bitirilemedi.")
         expect(weight_input(card(page, "Rope Pushdown"))).to_have_value("10")
-        assert sessions(page) == [], "Başarısız yazma kayıt eklememeliydi"
+        assert not any(session["finishedAt"] for session in sessions(page)), "Başarısız yazma antrenmanı bitirmemeliydi"
         page.screenshot(path=str(ARTIFACTS / "asama2-kayit-hatasi.png"))
         page.evaluate("window.__failWrites = false")
         page.get_by_role("button", name="Tekrar dene").click()
@@ -478,23 +481,17 @@ def push_workout_steps(run):
         radio(rope, "Kablo · kg").check()
         expect(last_time(rope)).to_have_text("Bu makinede önceki kayıt yok")
 
-    def leave_guard(page):
+    def leaving_keeps_values(page):
         reps(card(page, "Cable Fly"), 1).fill("12")
-        messages = []
-
-        def dismiss(dialog):
-            messages.append(dialog.message)
-            dialog.dismiss()
-
-        page.once("dialog", dismiss)
+        dialogs = []
+        page.on("dialog", lambda dialog: (dialogs.append(dialog.message), dialog.dismiss()))
         page.get_by_role("link", name="← Günler").click()
+        expect(page.locator("#resume-title")).to_have_text("Push")
+        assert not dialogs, f"Çıkarken onay sorulmamalıydı: {dialogs}"
+        page.get_by_role("link", name="Devam et").click()
         expect(page.locator(".topbar h1")).to_have_text("Push")
         expect(reps(card(page, "Cable Fly"), 1)).to_have_value("12")
-        assert messages and "kaydedilmedi" in messages[0], messages
-        page.once("dialog", lambda dialog: dialog.accept())
-        page.get_by_role("link", name="← Günler").click()
-        expect(page.locator("#next-title")).to_have_text("Pull")
-        expect(page.locator("#flash")).to_have_count(0)
+        go_home(page)
 
     def machine_error_and_retry(page):
         open_day(page, "push", "Push")
@@ -524,9 +521,162 @@ def push_workout_steps(run):
         ("'+ Set' ve '− Set'", add_and_remove_sets),
         ("'Bitir'de yazma hatası: değerler kalıyor; 'Tekrar dene' kaydediyor", finish_with_error_and_retry),
         ("Yeniden açınca son kullanılan makine seçili, 'Geçen sefer' ve ipuçları görünüyor", reopen_shows_last_time),
-        ("Kaydedilmemiş değerle çıkarken onay soruluyor", leave_guard),
+        ("Çıkınca değerler kaydediliyor; 'Devam et' ile geri geliyor", leaving_keeps_values),
         ("Makine eklerken yazma hatası: form kalıyor; 'Tekrar dene' ekliyor", machine_error_and_retry),
         ("Açık ve koyu tema ekran görüntüleri", screenshots),
+    ]
+
+
+# ---------------------------------------------------------------- Otomatik kaydetme ve devam eden antrenman
+
+def unfinished(page):
+    return [session for session in sessions(page) if not session["finishedAt"]]
+
+
+def autosave_steps(run):
+    state = {}
+
+    def saves_while_typing(page):
+        page.goto(run.base_url + "/")
+        state["today"] = today(page)
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        expect(save_status(page)).to_have_text("Makine eklendi ✓")
+        assert sessions(page) == [], "Değer girilmeden antrenman kaydedilmemeli"
+        log_sets(rope, "50", ["12"])
+        expect(save_status(page)).to_have_text("Kaydediliyor…")
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        [session] = unfinished(page)
+        draft = next(card for card in session["draft"]["cards"] if card["exerciseId"] == "rope-pushdown")
+        assert (draft["weight"], draft["reps"]) == ("50", ["12", "", ""]), draft
+
+    def resume_after_closing(page):
+        page.goto("about:blank")  # sekme kapanmış gibi
+        page.goto(run.base_url + "/")
+        expect(page.locator("#resume-title")).to_have_text("Push")
+        expect(page.locator(".days .muted").first).to_have_text("6 hareket · devam ediyor")
+        expect(page.locator("#next-title")).to_have_count(0)  # sıradaki gün zaten devam ediyor
+        page.screenshot(path=str(ARTIFACTS / "asama3-devam-et.png"))
+        page.get_by_role("link", name="Devam et").click()
+        rope = card(page, "Rope Pushdown")
+        expect(weight_input(rope)).to_have_value("50")
+        expect(reps(rope, 1)).to_have_value("12")
+        expect(radio(rope, "Kablo · kg")).to_be_checked()
+        expect(last_time(rope)).to_have_text("Bu makinede önceki kayıt yok")  # bitmemiş antrenman sayılmaz
+
+    def write_error_and_retry(page):
+        rope = card(page, "Rope Pushdown")
+        page.evaluate("window.__failWrites = true")
+        reps(rope, 2).fill("11")
+        expect(save_status(page)).to_contain_text("Kaydedilemedi.")
+        expect(save_status(page)).to_contain_text("Uygulamayı kapatmayın")
+        expect(reps(rope, 2)).to_have_value("11")
+        page.screenshot(path=str(ARTIFACTS / "asama3-kayit-hatasi.png"))
+        page.evaluate("window.__failWrites = false")
+        page.get_by_role("button", name="Tekrar dene").click()
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        draft = next(card for card in unfinished(page)[0]["draft"]["cards"] if card["exerciseId"] == "rope-pushdown")
+        assert draft["reps"] == ["12", "11", ""], draft
+
+    def finish_blocked_by_error(page):
+        rope = card(page, "Rope Pushdown")
+        page.evaluate("window.__failWrites = true")
+        reps(rope, 3).fill("10")
+        expect(save_status(page)).to_contain_text("Kaydedilemedi.")
+        finish(page)
+        expect(save_status(page)).to_contain_text("Antrenman bitirilemedi.")
+        expect(page.locator(".topbar h1")).to_have_text("Push")
+        assert len(unfinished(page)) == 1 and not [s for s in sessions(page) if s["finishedAt"]], "Antrenman bitmemeliydi"
+        page.evaluate("window.__failWrites = false")
+        page.get_by_role("button", name="Tekrar dene").click()
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        expect(page.locator("#resume-title")).to_have_count(0)
+        expect(page.locator("#next-title")).to_have_text("Pull")
+        [session] = sessions(page)
+        assert session["finishedAt"] and "draft" not in session, session
+        assert session["entries"][0]["sets"] == [
+            {"weight": 50, "reps": 12},
+            {"weight": 50, "reps": 11},
+            {"weight": 50, "reps": 10},
+        ], session["entries"]
+
+    def leaving_flushes(page):
+        open_day(page, "pull", "Pull")
+        lat = card(page, "Lat Pulldown (wide grip)")
+        add_machine(lat, "Makine", "kg")
+        expect(save_status(page)).to_have_text("Makine eklendi ✓")
+        log_sets(lat, "40", ["10"])
+        page.get_by_role("link", name="← Günler").click()  # 0,5 sn beklemeden çıkılıyor
+        expect(page.locator("#resume-title")).to_have_text("Pull")
+        page.get_by_role("link", name="Devam et").click()
+        lat = card(page, "Lat Pulldown (wide grip)")
+        expect(weight_input(lat)).to_have_value("40")
+        expect(reps(lat, 1)).to_have_value("10")
+        go_home(page)
+
+    def conflict_continue_and_delete(page):
+        page.locator(".days a[href='#/antrenman/legs']").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Pull antrenmanı bitmedi")
+        page.screenshot(path=str(ARTIFACTS / "asama3-baska-gun.png"))
+        page.get_by_role("link", name="Devam et").click()
+        expect(page.locator(".topbar h1")).to_have_text("Pull")
+        go_home(page)
+        page.locator(".days a[href='#/antrenman/legs']").click()
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.get_by_role("button", name="Sil ve Legs antrenmanına başla").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Pull antrenmanı bitmedi")
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Sil ve Legs antrenmanına başla").click()
+        expect(page.locator(".topbar h1")).to_have_text("Legs")
+        assert unfinished(page) == [], "Pull antrenmanı silinmeliydi"
+
+    def conflict_finish(page):
+        press = card(page, "Leg Press")
+        add_machine(press, "Makine", "kg")
+        log_sets(press, "100", ["12", "12"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        go_home(page)
+        page.locator(".days a[href='#/antrenman/upper']").click()
+        page.get_by_role("button", name="Bitir ve Upper antrenmanına başla").click()
+        expect(page.locator(".topbar h1")).to_have_text("Upper")
+        legs = [session for session in sessions(page) if session["dayId"] == "legs"]
+        assert legs and legs[0]["finishedAt"] and legs[0]["entries"][0]["name"] == "Leg Press", legs
+
+    def conflict_finish_with_problems(page):
+        incline = card(page, "Incline Dumbbell Press")
+        add_machine(incline, "Dambıl", "kg")
+        log_sets(incline, None, ["10"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        go_home(page)
+        page.locator(".days a[href='#/antrenman/lower']").click()
+        page.get_by_role("button", name="Bitir ve Lower antrenmanına başla").click()
+        expect(page.locator("#conflict-message")).to_have_text(
+            "Upper antrenmanında eksik ya da hatalı değerler var. Düzeltmek için antrenmana devam edin.")
+        assert len(unfinished(page)) == 1, "Hatalı antrenman bitmemeliydi"
+
+    def cancel_workout(page):
+        page.get_by_role("link", name="Devam et").click()
+        expect(page.locator(".topbar h1")).to_have_text("Upper")
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.get_by_role("button", name="Antrenmanı iptal et").click()
+        expect(page.locator(".topbar h1")).to_have_text("Upper")
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Antrenmanı iptal et").click()
+        expect(page.locator("#flash")).to_have_text("Antrenman iptal edildi.")
+        expect(page.locator("#resume-title")).to_have_count(0)
+        assert unfinished(page) == [], "İptal edilen antrenman silinmeliydi"
+
+    return [
+        ("Yazınca 'Kaydediliyor…' ve 'Kaydedildi ✓'; bitmemiş antrenman kaydediliyor", saves_while_typing),
+        ("Sekme kapatılıp açılınca 'Devam et' ile değerler geliyor; bitmemiş antrenman sayılmıyor", resume_after_closing),
+        ("Yazma hatası: 'Kaydedilemedi', değer ekranda; 'Tekrar dene' kaydediyor", write_error_and_retry),
+        ("Hata varken 'Bitir' antrenmanı bitirmiyor; 'Tekrar dene' bitiriyor", finish_blocked_by_error),
+        ("Beklemeden ekrandan çıkınca da son değer kaydediliyor", leaving_flushes),
+        ("Başka gün açılınca soruluyor: 'Devam et' ve onaylı 'Sil'", conflict_continue_and_delete),
+        ("'Bitir ve … başla': önceki antrenman bitiyor, yeni gün açılıyor", conflict_finish),
+        ("Hatalı değerli antrenman oradan bitirilemiyor", conflict_finish_with_problems),
+        ("'Antrenmanı iptal et' onay alıp siliyor", cancel_workout),
     ]
 
 
@@ -765,6 +915,7 @@ def main():
             run.flow("Altyapı", infrastructure_steps(run))
             run.flow("Ana ekran ve program", program_steps(run))
             run.flow("Push antrenmanı", push_workout_steps(run), init_script=FAIL_WRITES_SCRIPT)
+            run.flow("Otomatik kaydetme ve devam eden antrenman", autosave_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))
             run.flow("Hedef kopyası", target_copy_steps(run))
             run.flow("Aşama 1 verisinden yükseltme", upgrade_steps(run))

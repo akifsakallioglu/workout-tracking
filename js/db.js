@@ -42,11 +42,19 @@ export function getAll(db, storeName) {
 
 // Söz (promise), tarayıcı yazmanın diske işlendiğini bildirince tamamlanır ("strict" dayanıklılık).
 export function put(db, storeName, value) {
+  return write(db, storeName, (store) => store.put(value));
+}
+
+export function remove(db, storeName, key) {
+  return write(db, storeName, (store) => store.delete(key));
+}
+
+function write(db, storeName, operation) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, 'readwrite', { durability: 'strict' });
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error ?? new Error('Yazma iptal edildi'));
-    transaction.objectStore(storeName).put(value);
+    operation(transaction.objectStore(storeName));
   });
 }

@@ -238,6 +238,8 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - 3. bölümdeki kaydetme sırası ve durumlar uygulanır.
 - "Devam et" kartı eklenir. Aynı anda tek devam eden antrenman olur. Yarım antrenman varken yeni gün başlatılırsa "devam et / bitir / sil" diye sorulur.
 - "Bitir" bekleyen kayıtları bekler ve yarım setler için uyarır. "İptal" onay alır.
+- Devam eden antrenman ilk değer girilince oluşur; yalnızca göz atılan gün kaydedilmez. Taslakta ham kutu değerleri, seçili hareket ve makine ile başlarken kopyalanan hedef tutulur.
+- Uygulama içinde ekrandan çıkarken onay sorulmaz; bekleyen değişiklik hemen yazılır. Yalnızca son yazma başarısız olduysa sorulur.
 - *Bitti sayılır:*
   - "Kaydedildi ✓" göründükten sonra sekme kapatılıp açılınca değerler yerinde duruyor.
   - Yazma hatası taklit edilince "Kaydedilemedi" çıkıyor ve veri ekranda kalıyor. Hata kalkınca "Tekrar dene" ile "Kaydedildi ✓" oluyor.

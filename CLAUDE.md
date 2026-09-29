@@ -22,10 +22,13 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 
 ## Ekranlar
 - `js/main.js` yönlendirir: `#/` ana ekran (`views/home.js`), `#/antrenman/<gün>` antrenman ekranı (`views/workout.js`). Kart `views/exercise-card.js` içindedir (Aşama 8'deki geçmiş düzenlemede de kullanılacak).
-- Aşama 3'e kadar antrenman yalnızca "Bitir" ile kaydedilir; kaydedilmemiş değerlerle çıkarken onay sorulur.
+- Ekranlar `{ beforeLeave?, flush?, hasUnsavedChanges?, destroy? }` döndürür; `main.js` ekran değişmeden önce `beforeLeave`, sayfa kapanırken `flush` ve `hasUnsavedChanges` çağırır.
+- Devam eden antrenman, ilk değer girilince `finishedAt: null` ve `draft.cards` (ham kutu değerleri, seçili hareket ve makine, başlarken kopyalanan hedef) ile kaydedilir. "Bitir" aynı kaydı `entries` ile bitmiş hâle getirir, "İptal" siler. Aynı anda tek devam eden antrenman olur; başka gün açılınca "devam et / bitir / sil" ekranı çıkar.
 
 ## Kaydetme
-- Tüm yazmalar tek sıradan geçer. Durumlar: Kaydediliyor… / Kaydedildi ✓ / Kaydedilemedi (Tekrar dene).
+- Tüm yazmalar tek sıradan geçer. Durumlar: Kaydediliyor… / Kaydedildi ✓ / Kaydedilemedi (Tekrar dene). Henüz yazılmaya başlanmamış (beklemedeki) değişiklik de "Kaydediliyor…" sayılır.
+- Zamanlama: yazarken 0,5 sn bekleyip; kutudan çıkınca, set/makine değişince, ekrandan çıkınca ve uygulama arka plana geçince hemen.
+- Okumalar (`loadProgram`, `loadSessions`) sıradaki yazmaların bitmesini bekler; ekranlar daha önce istenen bütün değişiklikleri görür.
 - "Bitir" ve "Güncelle" bekleyen yazmaları bekler; hata varsa işlemi yapmaz.
 - Kayıpsızlık garantisi verilmez; arayüzde de verilmez.
 
@@ -40,4 +43,4 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Yeni kararlar bu dosyaya işlenir.
 
 ## Aşamalar
-0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman · 4 Yedekleme · 5 PWA ve yayına alma · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
+0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme · 5 PWA ve yayına alma · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi

@@ -346,18 +346,26 @@ a.button {
   color: var(--ok);
 }
 
-.next {
+.next,
+.resume {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
 }
 
-.next h2 {
+.resume {
+  margin-bottom: 12px;
+  border-color: var(--accent);
+}
+
+.next h2,
+.resume h2 {
   font-size: 1.5rem;
 }
 
-.next .button {
+.next .button,
+.resume .button {
   margin-top: 8px;
 }
 
@@ -444,6 +452,35 @@ a.button {
   display: flex;
   gap: 8px;
   margin-top: 8px;
+}
+
+.button.danger {
+  border-color: var(--danger);
+  background: transparent;
+  color: var(--danger);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.page-actions {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0 8px;
+}
+
+/* Başka bir gün devam ederken */
+.conflict h1 {
+  margin: 4px 0 8px;
+}
+
+.conflict-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 .loading,

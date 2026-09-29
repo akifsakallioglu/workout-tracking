@@ -7,6 +7,7 @@ const REPS_PATTERN = /^\d+$/;
 const numberFormat = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 });
 const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
 const dayMonthYear = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+const timeFormat = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
 // Boş kutu → null, geçerli değer → sayı, geçersiz değer → NaN. "22,5" ve "22.5" ikisi de 22.5 olur.
 export function parseWeight(text) {
@@ -157,6 +158,32 @@ export function buildSession({ id, startedAt, finishedAt, day, entries }) {
   return { id, dayId: day.id, dayName: day.name, startedAt, finishedAt, entries };
 }
 
+// Devam eden (bitmemiş) antrenman; birden çok varsa en son başlayanı. Yoksa null.
+export function activeSession(sessions) {
+  let latest = null;
+  for (const session of sessions) {
+    if (!session.finishedAt && (!latest || session.startedAt > latest.startedAt)) latest = session;
+  }
+  return latest;
+}
+
+// Kartlardaki değerleri denetler ve sorunsuz kartlardan kayıt girişleri üretir. Makinesi olmayan
+// ya da boş kart atlanır. Kart: { item, exerciseId, equipmentId, weight, reps }.
+export function evaluateCards(cards, exercises) {
+  const entries = [];
+  let hasProblems = false;
+  const results = cards.map((card) => {
+    const exercise = exercises[card.exerciseId];
+    const equipment = exercise?.equipment.find((option) => option.id === card.equipmentId && !option.archived);
+    if (!equipment) return { problems: [], message: '' };
+    const { sets, problems } = collectSets({ weight: card.weight, reps: card.reps }, equipment.unit);
+    if (problems.length) hasProblems = true;
+    else if (sets.length) entries.push(buildEntry({ item: card.item, exerciseId: card.exerciseId, exercise, equipment, sets }));
+    return { problems, message: validationMessage(problems, equipment.unit) };
+  });
+  return { results, entries, hasProblems };
+}
+
 // Kayıtlarda kullanılmış makinelerin kimlikleri.
 export function usedEquipmentIds(sessions) {
   return new Set(sessions.flatMap((session) => session.entries.map((entry) => entry.equipmentId)));
@@ -241,4 +268,9 @@ export function formatTarget({ sets, repMin, repMax }) {
 export function formatDate(iso, now = new Date()) {
   const date = new Date(iso);
   return (date.getFullYear() === now.getFullYear() ? dayMonth : dayMonthYear).format(date);
+}
+
+// "29 Eyl 18:05"
+export function formatDateTime(iso, now = new Date()) {
+  return `${formatDate(iso, now)} ${timeFormat.format(new Date(iso))}`;
 }

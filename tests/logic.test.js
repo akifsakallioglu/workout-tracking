@@ -1,10 +1,13 @@
 import { assert, assertEqual, test } from './harness.js';
 import {
+  activeSession,
   buildEntry,
   buildSession,
   collectSets,
   defaultEquipmentId,
   equipmentError,
+  evaluateCards,
+  formatDateTime,
   formatSet,
   formatSets,
   formatTarget,
@@ -176,7 +179,46 @@ test('o gün en son kullanılan makine seçili gelir; başka gün ve listede olm
   assertEqual(defaultEquipmentId([], 'legs', 'leg-press', archivedOnly), null, 'arşivlenmiş makine seçilmez');
 });
 
+test('devam eden antrenman: bitmemiş antrenmanların en son başlayanı', () => {
+  assertEqual(activeSession([]), null);
+  const sessions = [
+    session({ id: 'bitti', date: '2026-09-25T12:00:00.000Z' }),
+    session({ id: 'eski-devam', date: '2026-09-20T12:00:00.000Z', finished: false }),
+    session({ id: 'devam', date: '2026-09-22T12:00:00.000Z', finished: false }),
+  ];
+  assertEqual(activeSession(sessions).id, 'devam');
+  assertEqual(activeSession([sessions[0]]), null);
+});
+
+test('tarih ve saat biçimi: "29 Eyl 18:05"', () => {
+  const text = formatDateTime('2026-09-29T15:05:00.000Z', new Date('2026-10-01T00:00:00.000Z'));
+  assert(/^29 Eyl \d{2}:05$/.test(text), text);
+});
+
 // ---------------------------------------------------------------- Set girişi
+
+test('kartlar denetleniyor: sorunsuz kartlar kayda dönüşüyor, boş ve makinesiz kartlar atlanıyor', () => {
+  const exercises = {
+    'rope-pushdown': { name: 'Rope Pushdown', equipment: [{ id: 'k1', name: 'Kablo', unit: 'kg' }] },
+    'face-pull': { name: 'Face Pull', equipment: [] },
+    'cable-fly': { name: 'Cable Fly', equipment: [{ id: 'k3', name: 'Kablo 3', unit: 'kg' }] },
+  };
+  const item = (id, sets) => ({ id: `push-${id}`, options: [id], sets, repMin: 12, repMax: 15 });
+  const cards = [
+    { item: item('rope-pushdown', 3), exerciseId: 'rope-pushdown', equipmentId: 'k1', weight: '50', reps: ['12', '11', ''] },
+    { item: item('face-pull', 2), exerciseId: 'face-pull', equipmentId: null, weight: '', reps: ['', ''] },
+    { item: item('cable-fly', 3), exerciseId: 'cable-fly', equipmentId: 'k3', weight: '', reps: ['', '', ''] },
+  ];
+  const valid = evaluateCards(cards, exercises);
+  assertEqual(valid.hasProblems, false);
+  assertEqual(valid.entries.map((entry) => [entry.name, entry.equipmentName, entry.sets.length]), [['Rope Pushdown', 'Kablo', 2]]);
+  assertEqual(valid.entries[0].target, { sets: 3, repMin: 12, repMax: 15 });
+  cards[2].weight = '30';
+  const invalid = evaluateCards(cards, exercises);
+  assertEqual(invalid.hasProblems, true);
+  assertEqual(invalid.results[2].message, 'Tekrarları girin ya da ağırlığı silin.');
+  assertEqual(invalid.results[1], { problems: [], message: '' });
+});
 
 test('ağırlık bir kez girilir ve tekrarı girilen her sete uygulanır', () => {
   assertEqual(collectSets({ weight: '35', reps: ['12', '12', '11'] }, 'kg'), {
