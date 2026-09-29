@@ -94,7 +94,7 @@ export function lastPerformance(sessions, { dayId, exerciseId, equipmentId }, be
 }
 
 // O gün bu harekette en son kullanılan makine; yoksa (ya da o makine artık listede değilse)
-// listedeki ilk makine.
+// listedeki ilk makine. Hareketin hiç makinesi yoksa null.
 export function defaultEquipmentId(sessions, dayId, exerciseId, exercise) {
   const available = exercise.equipment.filter((equipment) => !equipment.archived);
   let latest = null;
@@ -106,7 +106,7 @@ export function defaultEquipmentId(sessions, dayId, exerciseId, exercise) {
     }
   }
   const used = latest && available.find((equipment) => equipment.id === latest.equipmentId);
-  return (used ?? available[0]).id;
+  return (used ?? available[0])?.id ?? null;
 }
 
 // Son bitirilen antrenmandan sonraki gün, program sırasına göre (sonuncudan sonra başa döner).
@@ -157,23 +157,26 @@ export function buildSession({ id, startedAt, finishedAt, day, entries }) {
   return { id, dayId: day.id, dayName: day.name, startedAt, finishedAt, entries };
 }
 
+// Kayıtlarda kullanılmış makinelerin kimlikleri.
+export function usedEquipmentIds(sessions) {
+  return new Set(sessions.flatMap((session) => session.entries.map((entry) => entry.equipmentId)));
+}
+
 // Kayıtlı program, başlangıç programının eski bir sürümündense yükseltilir: günler yeni
-// programdan gelir, eksik hareketler ve başlangıç makineleri eklenir; kullanıcının eklediği
-// makineler korunur. Sürüm güncelse program olduğu gibi döner.
-export function upgradeProgram(stored, seed) {
-  if ((stored.seedVersion ?? 1) >= seed.seedVersion) return stored;
+// programdan gelir, eksik hareketler eklenir, kullanıcının eklediği makineler ("eq-" ile başlar)
+// korunur. 3. sürümden önceki başlangıç programı her harekete varsayılan bir makine koyuyordu;
+// bunlar kaldırılır, kaydı olanlar ise silinmeden arşivlenir. Sürüm güncelse program olduğu gibi döner.
+export function upgradeProgram(stored, seed, used = new Set()) {
+  const version = stored.seedVersion ?? 1;
+  if (version >= seed.seedVersion) return stored;
+  const withoutDefaults = (equipment) => {
+    if (version >= 3 || equipment.id.startsWith('eq-')) return [equipment];
+    return used.has(equipment.id) ? [{ ...equipment, archived: true }] : [];
+  };
   const exercises = { ...stored.exercises };
   for (const [id, exercise] of Object.entries(seed.exercises)) {
     const existing = stored.exercises[id];
-    if (!existing) {
-      exercises[id] = exercise;
-      continue;
-    }
-    const known = new Set(existing.equipment.map((equipment) => equipment.id));
-    exercises[id] = {
-      ...existing,
-      equipment: [...existing.equipment, ...exercise.equipment.filter((equipment) => !known.has(equipment.id))],
-    };
+    exercises[id] = existing ? { ...existing, equipment: existing.equipment.flatMap(withoutDefaults) } : exercise;
   }
   return { ...stored, seedVersion: seed.seedVersion, exercises, days: seed.days };
 }
@@ -185,7 +188,8 @@ export function equipmentError(exercise, name, unit) {
   if (!trimmed) return 'Makineye bir ad verin.';
   if (trimmed.length > 40) return 'Ad en fazla 40 karakter olabilir.';
   const key = trimmed.toLocaleLowerCase('tr');
-  if (exercise.equipment.some((equipment) => equipment.name.trim().toLocaleLowerCase('tr') === key)) {
+  const active = exercise.equipment.filter((equipment) => !equipment.archived);
+  if (active.some((equipment) => equipment.name.trim().toLocaleLowerCase('tr') === key)) {
     return 'Bu adda bir makine zaten var.';
   }
   if (!Object.hasOwn(UNIT_LABELS, unit)) return 'Birimi seçin: kg, kademe ya da ağırlıksız.';

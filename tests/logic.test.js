@@ -73,18 +73,15 @@ test('başlangıç programı: satır sayıları, sıra ve hedefler yapıştırı
   assertEqual(itemTitle(pull.items.at(-1), seed.exercises), 'Wrist Curl / Reverse Curl');
 });
 
-test('başlangıç programı: her hareketin tek makinesi var; satırlar var olan hareketlere bağlı', () => {
+test('başlangıç programı: hareketler makinesiz başlıyor; satırlar var olan hareketlere bağlı', () => {
   const exercises = Object.entries(seed.exercises);
   assertEqual(exercises.length, 34);
-  for (const [id, exercise] of exercises) assertEqual(exercise.equipment.length, 1, id);
+  for (const [id, exercise] of exercises) assertEqual(exercise.equipment, [], id);
   for (const day of seed.days) {
     for (const item of day.items) {
       for (const option of item.options) assert(seed.exercises[option], `${day.id}: ${option} katalogda yok`);
     }
   }
-  const units = (id) => seed.exercises[id].equipment[0].unit;
-  assertEqual([units('ab-wheel-roll-out'), units('hyperextension'), units('rope-pushdown')], ['none', 'none', 'kg']);
-  assertEqual(seed.exercises['rope-pushdown'].equipment[0].id, 'rope-pushdown-kablo', 'Aşama 1 kayıtları bağlı kalsın');
 });
 
 // ---------------------------------------------------------------- Geçen sefer ve günler
@@ -173,6 +170,10 @@ test('o gün en son kullanılan makine seçili gelir; başka gün ve listede olm
   assertEqual(defaultEquipmentId(sessions, 'lower', 'standing-calf-raise', exercise), 'makine');
   const removed = [calf('c', '2026-09-29T12:00:00.000Z', 'legs', 'eski-makine')];
   assertEqual(defaultEquipmentId(removed, 'legs', 'standing-calf-raise', exercise), 'makine');
+  const noMachine = { name: 'Leg Press', equipment: [] };
+  assertEqual(defaultEquipmentId([], 'legs', 'leg-press', noMachine), null, 'makinesi olmayan hareket');
+  const archivedOnly = { name: 'Leg Press', equipment: [{ id: 'a', name: 'Makine', unit: 'kg', archived: true }] };
+  assertEqual(defaultEquipmentId([], 'legs', 'leg-press', archivedOnly), null, 'arşivlenmiş makine seçilmez');
 });
 
 // ---------------------------------------------------------------- Set girişi
@@ -248,6 +249,8 @@ test('makinenin adını ve birimini kullanıcı seçer; boş ad, aynı ad ve se�
   assertEqual(equipmentError(exercise, 'Kablo 2', 'toString'), 'Birimi seçin: kg, kademe ya da ağırlıksız.');
   assertEqual(equipmentError(exercise, 'Kablo 2', 'kg'), '', 'ikinci kablo da kg olabilir');
   assertEqual(equipmentError(exercise, 'Kablo 2', 'level'), '');
+  const archived = { name: 'Rope Pushdown', equipment: [{ id: 'k1', name: 'Kablo', unit: 'kg', archived: true }] };
+  assertEqual(equipmentError(archived, 'Kablo', 'kg'), '', 'arşivlenmiş makinenin adı yeniden kullanılabilir');
 });
 
 test('yeni makine programın kopyasına eklenir; eski program değişmez', () => {
@@ -260,7 +263,7 @@ test('yeni makine programın kopyasına eklenir; eski program değişmez', () =>
   assertEqual(program.exercises['rope-pushdown'].equipment.length, 1);
 });
 
-test('eski kayıtlı program yükseltiliyor; kullanıcının eklediği makineler korunuyor', () => {
+test('Aşama 1 programı yükseltiliyor: günler geliyor, kullanıcının makinesi kalıyor, varsayılan makine gidiyor', () => {
   const phase1 = {
     exercises: {
       'rope-pushdown': {
@@ -273,12 +276,36 @@ test('eski kayıtlı program yükseltiliyor; kullanıcının eklediği makineler
     },
     days: [{ id: 'push', name: 'Push', items: [{ id: 'push-rope-pushdown', options: ['rope-pushdown'], sets: 3, repMin: 12, repMax: 15 }] }],
   };
-  const upgraded = upgradeProgram(phase1, seed);
+  const upgraded = upgradeProgram(phase1, seed, new Set(['eq-x']));
   assertEqual(upgraded.seedVersion, seed.seedVersion);
   assertEqual(upgraded.days.map((day) => day.items.length), [6, 8, 8, 6, 6]);
   assertEqual(Object.keys(upgraded.exercises).length, 34);
-  assertEqual(upgraded.exercises['rope-pushdown'].equipment.map((equipment) => equipment.name), ['Kablo', 'Kablo 2']);
+  assertEqual(upgraded.exercises['rope-pushdown'].equipment, [{ id: 'eq-x', name: 'Kablo 2', unit: 'level' }]);
+  assertEqual(upgraded.exercises['leg-press'].equipment, []);
   assert(upgradeProgram(upgraded, seed) === upgraded, 'güncel program olduğu gibi dönmeli');
+});
+
+test('Aşama 2 programı yükseltiliyor: kaydı olan varsayılan makine arşivleniyor, kaydı olmayan siliniyor', () => {
+  const phase2 = {
+    seedVersion: 2,
+    exercises: {
+      'machine-chest-press': { name: 'Machine Chest Press', equipment: [{ id: 'machine-chest-press-makine', name: 'Makine', unit: 'kg' }] },
+      'cable-fly': {
+        name: 'Cable Fly',
+        equipment: [
+          { id: 'cable-fly-kablo', name: 'Kablo', unit: 'kg' },
+          { id: 'eq-kablo-3', name: 'Kablo 3', unit: 'kg' },
+        ],
+      },
+    },
+    days: [],
+  };
+  const upgraded = upgradeProgram(phase2, seed, new Set(['machine-chest-press-makine', 'eq-kablo-3']));
+  assertEqual(upgraded.exercises['machine-chest-press'].equipment, [
+    { id: 'machine-chest-press-makine', name: 'Makine', unit: 'kg', archived: true },
+  ]);
+  assertEqual(upgraded.exercises['cable-fly'].equipment, [{ id: 'eq-kablo-3', name: 'Kablo 3', unit: 'kg' }]);
+  assertEqual(upgraded.days.length, 5);
 });
 
 test('kayıt; gün, hareket, makine, birim ve hedefin kopyasını taşıyor', () => {

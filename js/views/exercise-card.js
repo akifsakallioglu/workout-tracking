@@ -13,10 +13,8 @@ import { escapeHtml } from '../ui.js';
 
 export function cardHtml(card, index, { day, program, sessions, busy }) {
   const exercise = program.exercises[card.exerciseId];
-  const equipment = exercise.equipment.find((option) => option.id === card.equipmentId);
-  const { unit } = equipment;
-  const last = lastPerformance(sessions, { dayId: day.id, exerciseId: card.exerciseId, equipmentId: equipment.id });
-  const weightInvalid = isInvalid(card, 'weight');
+  const machines = exercise.equipment.filter((option) => !option.archived);
+  const equipment = machines.find((option) => option.id === card.equipmentId);
 
   return `
     <section class="card" data-card="${index}" aria-labelledby="card-title-${index}">
@@ -36,14 +34,26 @@ export function cardHtml(card, index, { day, program, sessions, busy }) {
 
       <fieldset class="machines">
         <legend>Makine</legend>
+        ${machines.length ? '' : '<p class="muted no-machine">Bu hareket için henüz makine yok. Kullandığınız makineyi ekleyin.</p>'}
         <div class="chips">
-          ${exercise.equipment.filter((option) => !option.archived).map((option) =>
-            radioChip(`equipment-${index}`, option.id, `${option.name} · ${UNIT_LABELS[option.unit]}`, option.id === equipment.id)).join('')}
+          ${machines.map((option) =>
+            radioChip(`equipment-${index}`, option.id, `${option.name} · ${UNIT_LABELS[option.unit]}`, option.id === equipment?.id)).join('')}
           ${card.machineForm ? '' : '<button type="button" class="chip add" data-action="open-machine-form">+ Makine</button>'}
         </div>
       </fieldset>
       ${card.machineForm ? machineFormHtml(card.machineForm, index, busy) : ''}
+      ${equipment ? logHtml(card, index, equipment, day, sessions) : ''}
+      <p class="message card-message" role="alert">${escapeHtml(card.message)}</p>
+    </section>`;
+}
 
+// Seçili makinede geçen seferki performans, ağırlık kutusu ve tekrar kutuları.
+function logHtml(card, index, equipment, day, sessions) {
+  const { unit } = equipment;
+  const last = lastPerformance(sessions, { dayId: day.id, exerciseId: card.exerciseId, equipmentId: equipment.id });
+  const weightInvalid = isInvalid(card, 'weight');
+
+  return `
       <p class="last${last ? '' : ' empty'}">${last
         ? `Geçen sefer — ${formatDate(last.date)}: ${escapeHtml(formatSets(last.sets, last.unit))}`
         : 'Bu makinede önceki kayıt yok'}</p>
@@ -70,10 +80,7 @@ export function cardHtml(card, index, { day, program, sessions, busy }) {
           <button type="button" class="button small" data-action="add-set">+ Set</button>
           <button type="button" class="button small" data-action="remove-set"${card.reps.length <= 1 ? ' disabled' : ''}>− Set</button>
         </div>
-      </fieldset>
-
-      <p class="message card-message" role="alert">${escapeHtml(card.message)}</p>
-    </section>`;
+      </fieldset>`;
 }
 
 // Kartın bir kutusu işaretli mi: ağırlık sorunu ağırlık kutusunu, geçersiz tekrar kendi kutusunu,

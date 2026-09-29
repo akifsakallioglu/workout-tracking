@@ -1,6 +1,6 @@
 // Veri erişim katmanı: ekranlar veritabanına yalnızca buradan ulaşır.
 import { get, getAll, openDatabase, put } from './db.js';
-import { upgradeProgram } from './logic.js';
+import { upgradeProgram, usedEquipmentIds } from './logic.js';
 import { program as seedProgram } from './seed.js';
 
 let db = null;
@@ -20,8 +20,9 @@ export async function loadProgram() {
   let program;
   if (stored) {
     const { key, ...saved } = stored;
-    program = upgradeProgram(saved, structuredClone(seedProgram));
-    if (program === saved) return saved;
+    if ((saved.seedVersion ?? 1) >= seedProgram.seedVersion) return saved;
+    const used = usedEquipmentIds(await getAll(db, 'sessions'));
+    program = upgradeProgram(saved, structuredClone(seedProgram), used);
   } else {
     program = structuredClone(seedProgram);
   }

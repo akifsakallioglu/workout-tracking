@@ -63,11 +63,7 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
   - Tekrar girilip ağırlık girilmezse uyarı çıkar; boş tekrar kutusu kaydedilmez. Yalnızca ağırlık girilip tekrar girilmezse de uyarı çıkar; yazılan değer sessizce kaybolmaz.
   - Önceki değerler yalnızca soluk ipucudur; siz yazmadıkça hiçbir kutu dolmaz.
 - **"Yapıldı" ve "atlandı":** bitmiş bir antrenmanda en az bir seti girilen hareket "yapıldı" sayılır. Hiç seti girilmeyen hareket "atlandı" sayılır ve kayda yazılmaz. Atlanan hareket "geçen sefer", sayaç ve dönüşüm sırasında hesaba katılmaz. Bitmemiş antrenmanlar da bu hesaplara katılmaz.
-- **Başlangıç makineleri:** her harekete adından tahmin edilen tek bir makine konur.
-  - kg birimli olanlar: Dambıl, Kablo, Makine ya da Bar
-  - ağırlıksız: Vücut ağırlığı (Ab Wheel Roll-Out ve Hyperextension için)
-
-  Başka makineleri siz eklersiniz: "+ Makine" ile adı yazar, birimi (kg, kademe ya da ağırlıksız) kendiniz seçersiniz; birim önceden seçili gelmez. Aynı salondaki iki kablo makinesinin ikisi de kg olabilir.
+- **Makineleri siz eklersiniz:** hareketler makinesiz başlar; varsayılan makine yoktur. Her hareketin makinelerini (ikincisi dahil) "+ Makine" ile eklersiniz: adı yazar, birimi (kg, kademe ya da ağırlıksız) kendiniz seçersiniz; birim önceden seçili gelmez. Eklenen makine hemen kaydedilir. Aynı salondaki iki kablo makinesinin ikisi de kg olabilir. Makinesi olmayan harekette ağırlık ve tekrar kutuları görünmez.
 - **Türetilmiş bilgi:** "geçen sefer", sayaç, dönüşüm önerisi ve grafikler veritabanına yazılmaz. Her gösterimde kayıtlardan yeniden hesaplanır. Böylece geçmiş bir kaydı düzeltince hepsi kendiliğinden güncellenir. Sonradan eklenen bir özellik de eski kayıtlarla çalışır.
 
 ## 3. Kaydetme ve kayıt durumu
@@ -223,7 +219,7 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 **Aşama 1: İlk dilim.** Bir gün, bir hareket, iki makine, önceki performans ve bugünkü setlerin kaydı. Ayrıntılar 9. bölümde. Doğrulandıktan sonra durulur.
 
 **Aşama 2: Tüm program ve makine ekleme**
-- `seed.js` genişletilir: 5 gün, 34 satır, her harekete tahmini bir makine.
+- `seed.js` genişletilir: 5 gün, 34 satır. Hareketler makinesiz başlar; makineleri kullanıcı ekler.
 - Ana ekrandan gün seçilir ve "Sıradaki" önerisi görünür.
 - Antrenman ekranında günün tüm hareketleri Aşama 1 kartıyla girilir. Hedefler kayda kopyalanır. Kaydetme şimdilik "Bitir" ile tek seferde yapılır.
 - Makine seçimi ve "+ Makine" (Aşama 1'de geldi) tüm hareketlerde çalışır. O gün en son kullanılan makine seçili gelir.

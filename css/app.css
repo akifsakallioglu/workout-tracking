@@ -138,6 +138,10 @@ h1 {
   accent-color: var(--accent);
 }
 
+.no-machine {
+  margin-bottom: 8px;
+}
+
 .chip.add {
   border-style: dashed;
   color: var(--accent);

@@ -288,9 +288,15 @@ def program_steps(run):
             "Hedef 3 × 12–15",
             "Hedef 2 × 15",
         ])
-        expect(reps_inputs(card(page, "Seated Lateral Raise"))).to_have_count(4)
-        expect(radio(card(page, "Machine Chest Press"), "Makine · kg")).to_be_checked()
-        expect(radio(card(page, "Seated Lateral Raise"), "Dambıl · kg")).to_be_checked()
+        expect(page.locator("[data-card] .no-machine")).to_have_count(6)
+        expect(page.locator("[data-card] .chip:has(input[name^='equipment'])")).to_have_count(0)
+        expect(page.locator("[data-card] input[data-field]")).to_have_count(0)
+        page.screenshot(path=str(ARTIFACTS / "asama2-makinesiz-kartlar.png"))
+        lateral = card(page, "Seated Lateral Raise")
+        add_machine(lateral, "Dambıl", "kg")
+        expect(radio(lateral, "Dambıl · kg")).to_be_checked()
+        expect(lateral.locator(".no-machine")).to_have_count(0)
+        expect(reps_inputs(lateral)).to_have_count(4)
         go_home(page)
 
     def upper_cards(page):
@@ -298,15 +304,16 @@ def program_steps(run):
         expect(page.locator("[data-card]")).to_have_count(6)
         overhead = card(page, "Overhead Rope Extension")
         expect(overhead.locator(".target")).to_have_text("Hedef 3 × 12–15")
-        expect(reps_inputs(overhead)).to_have_count(3)
         go_home(page)
 
     def lower_bodyweight(page):
         open_day(page, "lower", "Lower")
-        for title in ("Hyperextension", "Ab Wheel Roll-Out"):
-            bodyweight = card(page, title)
-            expect(radio(bodyweight, "Vücut ağırlığı · ağırlıksız")).to_be_checked()
-            expect(weight_input(bodyweight)).to_have_count(0)
+        wheel = card(page, "Ab Wheel Roll-Out")
+        add_machine(wheel, "Vücut ağırlığı", "ağırlıksız")
+        expect(radio(wheel, "Vücut ağırlığı · ağırlıksız")).to_be_checked()
+        expect(weight_input(wheel)).to_have_count(0)
+        expect(reps_inputs(wheel)).to_have_count(3)
+        expect(card(page, "Hyperextension").locator(".no-machine")).to_have_count(1)
         go_home(page)
 
     def pull_alternatives(page):
@@ -315,17 +322,20 @@ def program_steps(run):
         alternating = card(page, "Wrist Curl / Reverse Curl")
         expect(radio(alternating, "Wrist Curl")).to_be_checked()
         expect(radio(alternating, "Reverse Curl")).not_to_be_checked()
+        add_machine(alternating, "Dambıl", "kg")
         assert machine_names(alternating) == ["Dambıl · kg"], machine_names(alternating)
         radio(alternating, "Reverse Curl").check()
-        expect(radio(alternating, "Bar · kg")).to_be_checked()
-        assert machine_names(alternating) == ["Bar · kg"], machine_names(alternating)
+        expect(alternating.locator(".no-machine")).to_have_count(1)
+        assert machine_names(alternating) == [], "Makine harekete ait: Reverse Curl'ün makinesi yok"
+        radio(alternating, "Wrist Curl").check()
+        expect(radio(alternating, "Dambıl · kg")).to_be_checked()
         go_home(page)
 
     return [
         ("Ana ekran: 'Sıradaki' Push; 5 gün ve hareket sayıları", home_screen),
-        ("Push: 6 hareket programdaki sırayla ve hedeflerle; başlangıç makineleri", push_cards),
+        ("Push: 6 hareket programdaki sırayla ve hedeflerle; hiçbirinde varsayılan makine yok", push_cards),
         ("Upper: Overhead Rope Extension 3 × 12–15 (Push'ta 2 × 15)", upper_cards),
-        ("Lower: ağırlıksız hareketlerde ağırlık kutusu yok", lower_bodyweight),
+        ("Lower: elle eklenen ağırlıksız makinede ağırlık kutusu yok", lower_bodyweight),
         ("Pull: dönüşümlü satırda hareket elle seçiliyor; makine listesi harekete göre", pull_alternatives),
     ]
 
@@ -335,14 +345,27 @@ def program_steps(run):
 def push_workout_steps(run):
     state = {}
 
-    def empty_and_missing_values(page):
+    def machines_added_and_saved(page):
         page.goto(run.base_url + "/")
         state["today"] = today(page)
         open_day(page, "push", "Push")
         rope = card(page, "Rope Pushdown")
-        assert machine_names(rope) == ["Kablo · kg"], machine_names(rope)
+        expect(rope.locator(".no-machine")).to_have_text("Bu hareket için henüz makine yok. Kullandığınız makineyi ekleyin.")
+        add_machine(rope, "Kablo", "kg")
+        expect(save_status(page)).to_have_text("Makine eklendi ✓")
+        expect(radio(rope, "Kablo · kg")).to_be_checked()
         expect(last_time(rope)).to_have_text("Bu makinede önceki kayıt yok")
         expect(weight_label(rope)).to_have_text("Ağırlık (kg)")
+        add_machine(card(page, "Machine Chest Press"), "Göğüs Pres", "kg")
+        page.reload()
+        expect(page.locator(".topbar h1")).to_have_text("Push")
+        assert machine_names(card(page, "Rope Pushdown")) == ["Kablo · kg"], "Eklenen makine kaydedilmeliydi"
+        expect(radio(card(page, "Machine Chest Press"), "Göğüs Pres · kg")).to_be_checked()
+        saved = stored_program(page)["exercises"]
+        assert [equipment["name"] for equipment in saved["rope-pushdown"]["equipment"]] == ["Kablo"], saved["rope-pushdown"]
+
+    def empty_and_missing_values(page):
+        rope = card(page, "Rope Pushdown")
         finish(page)
         expect(workout_message(page)).to_have_text("En az bir hareket için set girin.")
 
@@ -397,6 +420,12 @@ def push_workout_steps(run):
         add_machine(fly, "Kablo 3", "kg")
         expect(radio(fly, "Kablo 3 · kg")).to_be_checked()
         assert machine_names(rope) == ["Kablo · kg", "Kablo 2 · kademe"], machine_names(rope)
+        page.reload()
+        expect(page.locator(".topbar h1")).to_have_text("Push")
+        rope = card(page, "Rope Pushdown")
+        assert machine_names(rope) == ["Kablo · kg", "Kablo 2 · kademe"], "İkinci makine de kaydedilmeliydi"
+        expect(radio(rope, "Kablo · kg")).to_be_checked()
+        expect(radio(card(page, "Cable Fly"), "Kablo 3 · kg")).to_be_checked()
 
     def add_and_remove_sets(page):
         rope = card(page, "Rope Pushdown")
@@ -412,6 +441,7 @@ def push_workout_steps(run):
         expect(reps_inputs(rope)).to_have_count(3)
 
     def finish_with_error_and_retry(page):
+        radio(card(page, "Rope Pushdown"), "Kablo 2 · kademe").check()
         log_sets(card(page, "Rope Pushdown"), "10", ["12", "12", "10"])
         log_sets(card(page, "Machine Chest Press"), "50", ["12", "11", "10"])
         page.evaluate("window.__failWrites = true")
@@ -443,7 +473,7 @@ def push_workout_steps(run):
         expect(weight_input(rope)).to_have_value("")
         expect(last_time(card(page, "Machine Chest Press"))).to_have_text(f"Geçen sefer — {state['today']}: 50 kg × 12 · 11 · 10")
         fly = card(page, "Cable Fly")
-        expect(radio(fly, "Kablo · kg")).to_be_checked()
+        expect(radio(fly, "Kablo 3 · kg")).to_be_checked()
         expect(last_time(fly)).to_have_text("Bu makinede önceki kayıt yok")
         radio(rope, "Kablo · kg").check()
         expect(last_time(rope)).to_have_text("Bu makinede önceki kayıt yok")
@@ -473,7 +503,7 @@ def push_workout_steps(run):
         add_machine(overhead, "Kablo 4", "kg")
         expect(save_status(page)).to_contain_text("Makine eklenemedi.")
         expect(overhead.get_by_label("Ad", exact=True)).to_have_value("Kablo 4")
-        assert machine_names(overhead) == ["Kablo · kg"], machine_names(overhead)
+        assert machine_names(overhead) == [], machine_names(overhead)
         page.evaluate("window.__failWrites = false")
         page.get_by_role("button", name="Tekrar dene").click()
         expect(save_status(page)).to_have_text("Makine eklendi ✓")
@@ -487,9 +517,10 @@ def push_workout_steps(run):
         page.screenshot(path=str(ARTIFACTS / "asama2-antrenman-koyu.png"), full_page=True)
 
     return [
+        ("Makineler elle ekleniyor ve sayfa yenilense de kayıtlı kalıyor", machines_added_and_saved),
         ("Boş 'Bitir', eksik ağırlık ve eksik tekrar uyarıları; kayıt yapılmıyor", empty_and_missing_values),
         ("Makine formu: boş ad, aynı ad ve seçilmemiş birim reddediliyor; Vazgeç", machine_form_validation),
-        ("'Kablo 2 · kademe' ve 'Kablo 3 · kg' ekleniyor; ad önerileri güncelleniyor", add_machines),
+        ("İkinci makine ('Kablo 2 · kademe') ve 'Kablo 3 · kg' ekleniyor; yenilemeden sonra duruyor", add_machines),
         ("'+ Set' ve '− Set'", add_and_remove_sets),
         ("'Bitir'de yazma hatası: değerler kalıyor; 'Tekrar dene' kaydediyor", finish_with_error_and_retry),
         ("Yeniden açınca son kullanılan makine seçili, 'Geçen sefer' ve ipuçları görünüyor", reopen_shows_last_time),
@@ -509,6 +540,7 @@ def day_separation_steps(run):
         state["today"] = today(page)
         open_day(page, "legs", "Legs")
         calf = card(page, "Standing Calf Raise")
+        add_machine(calf, "Makine", "kg")
         expect(reps_inputs(calf)).to_have_count(4)
         add_machine(calf, "Calf 2", "kg")
         expect(radio(calf, "Calf 2 · kg")).to_be_checked()
@@ -547,6 +579,7 @@ def day_separation_steps(run):
         open_day(page, "pull", "Pull")
         alternating = card(page, "Wrist Curl / Reverse Curl")
         radio(alternating, "Reverse Curl").check()
+        add_machine(alternating, "Bar", "kg")
         log_sets(alternating, "20", ["15", "15"])
         finish(page)
         expect(page.locator("#flash")).to_have_text("Pull antrenmanı kaydedildi ✓")
@@ -573,6 +606,7 @@ def target_copy_steps(run):
     def save_push(page):
         page.goto(run.base_url + "/")
         open_day(page, "push", "Push")
+        add_machine(card(page, "Rope Pushdown"), "Kablo", "kg")
         log_sets(card(page, "Rope Pushdown"), "50", ["12"])
         finish(page)
         expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
@@ -634,20 +668,86 @@ def upgrade_steps(run):
     }
 
     def upgraded(page):
-        page.goto(run.base_url + "/tests/harness.js")  # aynı adreste boş bir sayfa: veritabanı elle kurulur
+        page.goto(run.base_url + "/tests/blank.html")  # aynı adreste boş bir sayfa: veritabanı elle kurulur
         page.evaluate(PHASE1_DATABASE_SCRIPT, phase1)
         page.goto(run.base_url + "/")
         expect(page.locator(".day-name")).to_have_count(5)
         expect(page.locator("#next-title")).to_have_text("Pull")
         open_day(page, "push", "Push")
         rope = card(page, "Rope Pushdown")
-        assert machine_names(rope) == ["Kablo · kg", "Kablo 2 · kademe"], machine_names(rope)
+        assert machine_names(rope) == ["Kablo 2 · kademe"], machine_names(rope)
         expect(radio(rope, "Kablo 2 · kademe")).to_be_checked()
         expect(last_time(rope)).to_have_text("Geçen sefer — 22 Eyl: 10k × 12")
-        assert stored_program(page)["seedVersion"] == 2, "Yükseltilen program kaydedilmeliydi"
+        saved = stored_program(page)
+        assert saved["seedVersion"] == 3, "Yükseltilen program kaydedilmeliydi"
+        assert [equipment["id"] for equipment in saved["exercises"]["rope-pushdown"]["equipment"]] == ["eq-eski"], saved
 
     return [
-        ("Aşama 1 programı yükseltiliyor: 5 gün geliyor, eklenen makine ve kayıt duruyor", upgraded),
+        ("Aşama 1 programı yükseltiliyor: 5 gün geliyor; eklenen makine ve kaydı duruyor, varsayılan makine gidiyor", upgraded),
+    ]
+
+
+# ---------------------------------------------------------------- Aşama 2'den yükseltme
+
+def phase2_upgrade_steps(run):
+    def entry(equipment_id, name):
+        return {
+            "exerciseId": "machine-chest-press",
+            "equipmentId": equipment_id,
+            "name": "Machine Chest Press",
+            "equipmentName": name,
+            "unit": "kg",
+            "options": ["machine-chest-press"],
+            "target": {"sets": 3, "repMin": 10, "repMax": 12},
+            "sets": [{"weight": 40, "reps": 12}],
+        }
+
+    phase2 = {
+        "program": {
+            "key": "program",
+            "seedVersion": 2,
+            "exercises": {
+                "machine-chest-press": {
+                    "name": "Machine Chest Press",
+                    "equipment": [{"id": "machine-chest-press-makine", "name": "Makine", "unit": "kg"}],
+                },
+                "cable-fly": {
+                    "name": "Cable Fly",
+                    "equipment": [
+                        {"id": "cable-fly-kablo", "name": "Kablo", "unit": "kg"},
+                        {"id": "eq-kablo-3", "name": "Kablo 3", "unit": "kg"},
+                    ],
+                },
+            },
+            "days": [],
+        },
+        "sessions": [{
+            "id": "aşama-2-kaydi",
+            "dayId": "push",
+            "dayName": "Push",
+            "startedAt": "2026-09-22T12:00:00.000Z",
+            "finishedAt": "2026-09-22T12:00:00.000Z",
+            "entries": [entry("machine-chest-press-makine", "Makine")],
+        }],
+    }
+
+    def upgraded(page):
+        page.goto(run.base_url + "/tests/blank.html")
+        page.evaluate(PHASE1_DATABASE_SCRIPT, phase2)
+        page.goto(run.base_url + "/")
+        open_day(page, "push", "Push")
+        chest = card(page, "Machine Chest Press")
+        expect(chest.locator(".no-machine")).to_have_count(1)
+        assert machine_names(card(page, "Cable Fly")) == ["Kablo 3 · kg"], machine_names(card(page, "Cable Fly"))
+        add_machine(chest, "Makine", "kg")
+        expect(radio(chest, "Makine · kg")).to_be_checked()
+        expect(last_time(chest)).to_have_text("Bu makinede önceki kayıt yok")
+        saved = stored_program(page)["exercises"]["machine-chest-press"]["equipment"]
+        assert saved[0] == {"id": "machine-chest-press-makine", "name": "Makine", "unit": "kg", "archived": True}, saved
+        assert len(sessions(page)) == 1, "Eski kayıt silinmemeli"
+
+    return [
+        ("Aşama 2 programı yükseltiliyor: varsayılan makineler listeden kalkıyor, kaydı olan arşivleniyor", upgraded),
     ]
 
 
@@ -668,6 +768,7 @@ def main():
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))
             run.flow("Hedef kopyası", target_copy_steps(run))
             run.flow("Aşama 1 verisinden yükseltme", upgrade_steps(run))
+            run.flow("Aşama 2 verisinden yükseltme", phase2_upgrade_steps(run))
             browser.close()
     finally:
         server.shutdown()

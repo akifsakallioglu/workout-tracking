@@ -67,7 +67,9 @@ export async function renderWorkout(container, { dayId, navigate }) {
   };
 
   const exerciseOf = (card) => state.program.exercises[card.exerciseId];
-  const equipmentOf = (card) => exerciseOf(card).equipment.find((equipment) => equipment.id === card.equipmentId);
+  // Seçili makine; hareketin henüz makinesi yoksa undefined.
+  const equipmentOf = (card) =>
+    exerciseOf(card).equipment.find((equipment) => equipment.id === card.equipmentId && !equipment.archived);
   const cardContext = () => ({ day, program: state.program, sessions: state.sessions, busy: state.busy });
 
   function render() {
@@ -126,6 +128,7 @@ export async function renderWorkout(container, { dayId, navigate }) {
     let hasProblems = false;
     for (const card of state.cards) {
       const equipment = equipmentOf(card);
+      if (!equipment) continue; // makinesi olmayan hareketin kutusu yok; atlanır
       const { sets, problems } = collectSets({ weight: card.weight, reps: card.reps }, equipment.unit);
       card.problems = problems;
       card.message = validationMessage(problems, equipment.unit);
@@ -183,6 +186,10 @@ export async function renderWorkout(container, { dayId, navigate }) {
       await saveProgram(next);
       state.program = next;
       card.equipmentId = equipment.id;
+      // Aynı hareketi kullanan ve henüz makinesi olmayan kartlarda da yeni makine seçili gelsin.
+      for (const other of state.cards) {
+        if (other.exerciseId === card.exerciseId && !equipmentOf(other)) other.equipmentId = equipment.id;
+      }
       card.machineForm = null;
       card.problems = [];
       card.message = '';

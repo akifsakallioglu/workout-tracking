@@ -1,49 +1,43 @@
-// Başlangıç programı: ilk açılışta veritabanına yazılır. Her hareket, adından tahmin edilen tek
-// makineyle başlar; başka makineleri kullanıcı kendisi ekler. SEED_VERSION artınca kayıtlı
-// programa yeni gün ve hareketler eklenir, kullanıcının eklediği makineler korunur.
-export const SEED_VERSION = 2;
-
-const MAKINE = { slug: 'makine', name: 'Makine', unit: 'kg' };
-const KABLO = { slug: 'kablo', name: 'Kablo', unit: 'kg' };
-const DAMBIL = { slug: 'dambil', name: 'Dambıl', unit: 'kg' };
-const BAR = { slug: 'bar', name: 'Bar', unit: 'kg' };
-const VUCUT = { slug: 'vucut-agirligi', name: 'Vücut ağırlığı', unit: 'none' };
+// Başlangıç programı: ilk açılışta veritabanına yazılır. Hareketler makinesiz başlar; her hareketin
+// makinelerini (adı ve birimiyle) kullanıcı kendisi ekler. SEED_VERSION artınca kayıtlı program
+// yükseltilir: günler yeni programdan gelir, kullanıcının eklediği makineler korunur.
+export const SEED_VERSION = 3;
 
 const EXERCISES = {
-  'machine-chest-press': ['Machine Chest Press', MAKINE],
-  'cable-fly': ['Cable Fly', KABLO],
-  'seated-lateral-raise': ['Seated Lateral Raise', DAMBIL],
-  'machine-shoulder-press': ['Machine Shoulder Press', MAKINE],
-  'rope-pushdown': ['Rope Pushdown', KABLO],
-  'overhead-rope-extension': ['Overhead Rope Extension', KABLO],
-  'lat-pulldown-wide-grip': ['Lat Pulldown (wide grip)', MAKINE],
-  'cable-row': ['Cable Row', KABLO],
-  'dumbbell-pullover': ['Dumbbell Pullover', DAMBIL],
-  'rear-delt-machine': ['Rear Delt Machine', MAKINE],
-  'face-pull': ['Face Pull', KABLO],
-  'incline-dumbbell-curl': ['Incline Dumbbell Curl', DAMBIL],
-  'dumbbell-shrug': ['Dumbbell Shrug', DAMBIL],
-  'wrist-curl': ['Wrist Curl', DAMBIL],
-  'reverse-curl': ['Reverse Curl', BAR],
-  'leg-press': ['Leg Press', MAKINE],
-  'leg-extension': ['Leg Extension', MAKINE],
-  'lying-leg-curl': ['Lying Leg Curl', MAKINE],
-  'hip-thrust': ['Hip Thrust', BAR],
-  'standing-calf-raise': ['Standing Calf Raise', MAKINE],
-  'seated-calf-raise': ['Seated Calf Raise', MAKINE],
-  'ab-crunch-machine': ['Ab Crunch Machine', MAKINE],
-  'cable-chop': ['Cable Chop', KABLO],
-  'reverse-cable-chop': ['Reverse Cable Chop', KABLO],
-  'incline-dumbbell-press': ['Incline Dumbbell Press', DAMBIL],
-  'seated-cable-row': ['Seated Cable Row', KABLO],
-  'cable-lateral-raise': ['Cable Lateral Raise', KABLO],
-  'pec-deck': ['Pec Deck', MAKINE],
-  'concentration-curl': ['Concentration Curl', DAMBIL],
-  'romanian-deadlift': ['Romanian Deadlift', BAR],
-  'step-up': ['Step-Up', DAMBIL],
-  'seated-hamstring-curl': ['Seated Hamstring Curl', MAKINE],
-  hyperextension: ['Hyperextension', VUCUT],
-  'ab-wheel-roll-out': ['Ab Wheel Roll-Out', VUCUT],
+  'machine-chest-press': 'Machine Chest Press',
+  'cable-fly': 'Cable Fly',
+  'seated-lateral-raise': 'Seated Lateral Raise',
+  'machine-shoulder-press': 'Machine Shoulder Press',
+  'rope-pushdown': 'Rope Pushdown',
+  'overhead-rope-extension': 'Overhead Rope Extension',
+  'lat-pulldown-wide-grip': 'Lat Pulldown (wide grip)',
+  'cable-row': 'Cable Row',
+  'dumbbell-pullover': 'Dumbbell Pullover',
+  'rear-delt-machine': 'Rear Delt Machine',
+  'face-pull': 'Face Pull',
+  'incline-dumbbell-curl': 'Incline Dumbbell Curl',
+  'dumbbell-shrug': 'Dumbbell Shrug',
+  'wrist-curl': 'Wrist Curl',
+  'reverse-curl': 'Reverse Curl',
+  'leg-press': 'Leg Press',
+  'leg-extension': 'Leg Extension',
+  'lying-leg-curl': 'Lying Leg Curl',
+  'hip-thrust': 'Hip Thrust',
+  'standing-calf-raise': 'Standing Calf Raise',
+  'seated-calf-raise': 'Seated Calf Raise',
+  'ab-crunch-machine': 'Ab Crunch Machine',
+  'cable-chop': 'Cable Chop',
+  'reverse-cable-chop': 'Reverse Cable Chop',
+  'incline-dumbbell-press': 'Incline Dumbbell Press',
+  'seated-cable-row': 'Seated Cable Row',
+  'cable-lateral-raise': 'Cable Lateral Raise',
+  'pec-deck': 'Pec Deck',
+  'concentration-curl': 'Concentration Curl',
+  'romanian-deadlift': 'Romanian Deadlift',
+  'step-up': 'Step-Up',
+  'seated-hamstring-curl': 'Seated Hamstring Curl',
+  hyperextension: 'Hyperextension',
+  'ab-wheel-roll-out': 'Ab Wheel Roll-Out',
 };
 
 // [hareket (dönüşümlü satırda iki hareket), set, en az tekrar, en çok tekrar (yoksa en azla aynı)]
@@ -96,12 +90,7 @@ const DAYS = [
 
 export const program = {
   seedVersion: SEED_VERSION,
-  exercises: Object.fromEntries(
-    Object.entries(EXERCISES).map(([id, [name, machine]]) => [
-      id,
-      { name, equipment: [{ id: `${id}-${machine.slug}`, name: machine.name, unit: machine.unit }] },
-    ]),
-  ),
+  exercises: Object.fromEntries(Object.entries(EXERCISES).map(([id, name]) => [id, { name, equipment: [] }])),
   days: DAYS.map(([id, name, items]) => ({
     id,
     name,
