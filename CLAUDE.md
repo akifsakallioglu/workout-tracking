@@ -22,6 +22,7 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - İlerleme: bugünkü setler aynı anahtardaki bir önceki kayıtla set set karşılaştırılır; ağırlığı (kademesi) yüksek ya da ağırlığı aynı ve tekrarı yüksek bir set varsa ilerlemedir. Sayaç: son ilerlemeden sonraki bitmiş antrenman sayısı (hiç ilerleme yoksa ilk kayıttan). Kartta "Son ilerlemeden beri N antrenman" / "İlk kayıttan beri N antrenman" / "Geçen antrenmanda ilerledin"; set girerken "Bu antrenmanda ilerledin ✓".
 
 ## Ekranlar
+- Renkler uygulama simgesinden gelir (koyu yeşil `#034425`, krem `#faf1e1`, turuncu `#f06b29`); hepsi `css/app.css` başındaki değişkenlerde, açık ve koyu tema için ayrı. Yazı renkleri zemine karşı en az 4,5:1 karşıtlıkta seçilir.
 - `js/main.js` yönlendirir: `#/` ana ekran (`views/home.js`), `#/antrenman/<gün>` antrenman ekranı (`views/workout.js`), `#/ayarlar` ayarlar (`views/settings.js`). Kart `views/exercise-card.js` içindedir (Aşama 8'deki geçmiş düzenlemede de kullanılacak).
 - Ekranlar `{ beforeLeave?, flush?, hasUnsavedChanges?, destroy? }` döndürür; `main.js` ekran değişmeden önce `beforeLeave`, sayfa kapanırken `flush` ve `hasUnsavedChanges` çağırır.
 - Devam eden antrenman, ilk değer girilince `finishedAt: null` ve `draft.cards` (ham kutu değerleri, seçili hareket ve makine, başlarken kopyalanan hedef) ile kaydedilir. "Bitir" aynı kaydı `entries` ile bitmiş hâle getirir, "İptal" siler. Aynı anda tek devam eden antrenman olur; başka gün açılınca "devam et / bitir / sil" ekranı çıkar.

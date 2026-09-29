@@ -1,39 +1,42 @@
+/* Renkler uygulama simgesinden: koyu yeşil #034425, krem #faf1e1, turuncu #f06b29. */
 :root {
   color-scheme: light dark;
-  --bg: #f4f6f8;
-  --surface: #ffffff;
-  --subtle: #f0f3f6;
-  --text: #1b1f24;
-  --muted: #5c6773;
-  --border: #d0d7de;
+  --bg: #f6f1e7;
+  --surface: #fffdf8;
+  --subtle: #efe8da;
+  --text: #1b2a21;
+  --muted: #5b6a60;
+  --border: #dcd3c1;
   --input-bg: #ffffff;
-  --accent: #0969da;
-  --accent-soft: #ddf4ff;
-  --accent-text: #ffffff;
-  --ok: #1a7f37;
-  --danger: #cf222e;
-  --danger-soft: #ffebe9;
-  --warn-bg: #fff8c5;
-  --warn-border: #d4a72c;
+  --accent: #034425;
+  --accent-soft: #dfece2;
+  --accent-text: #faf1e1;
+  --highlight: #b8490f; /* simgedeki turuncunun yazıda okunur tonu */
+  --ok: #1d6b3c;
+  --danger: #c42b1c;
+  --danger-soft: #fdeceb;
+  --warn-bg: #fdf1c9;
+  --warn-border: #c9982a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1216;
-    --surface: #171b21;
-    --subtle: #1e242c;
-    --text: #e6e9ee;
-    --muted: #9aa5b1;
-    --border: #2e3540;
-    --input-bg: #0f1216;
-    --accent: #4c8dff;
-    --accent-soft: rgba(76, 141, 255, 0.16);
-    --accent-text: #0b1220;
-    --ok: #3fb950;
+    --bg: #0c1811;
+    --surface: #132219;
+    --subtle: #1a2d21;
+    --text: #efe8d9;
+    --muted: #a4b1a7;
+    --border: #2a3e31;
+    --input-bg: #0c1811;
+    --accent: #7ccf9c;
+    --accent-soft: rgba(124, 207, 156, 0.14);
+    --accent-text: #0c1811;
+    --highlight: #ff9a5c;
+    --ok: #7ccf9c;
     --danger: #ff7b72;
     --danger-soft: rgba(255, 123, 114, 0.12);
-    --warn-bg: rgba(187, 128, 9, 0.15);
-    --warn-border: #bb8009;
+    --warn-bg: rgba(201, 152, 42, 0.16);
+    --warn-border: #c9982a;
   }
 }
 
@@ -184,7 +187,7 @@ h1 {
 
 .progress-live {
   margin: 8px 0 0;
-  color: var(--ok);
+  color: var(--highlight);
   font-weight: 600;
 }
 
@@ -482,7 +485,7 @@ a.button {
 
 .resume {
   margin-bottom: 12px;
-  border-color: var(--accent);
+  border-color: var(--highlight);
 }
 
 .next h2,
