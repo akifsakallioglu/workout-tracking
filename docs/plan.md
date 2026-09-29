@@ -161,7 +161,7 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
   - Satır düzenleme penceresinde şunlar vardır:
     - **Hareket:** katalogdan seçilir ya da yeni oluşturulur. "Adı düzelt", adı her yerde değiştirir.
     - **İkinci hareket (isteğe bağlı):** dönüşümlü satırlar için.
-    - **Hedef:** set sayısı ile en az ve en çok tekrar.
+    - **Hedef:** set sayısı ve en çok tekrar (en az tekrar kullanıcının isteğiyle kaldırıldı).
     - **Makineler:** ekleme, yeniden adlandırma, arşivleme ve arşivden geri alma.
   - "Programı sıfırla", yapıştırdığınız programı geri getirir. Geçmiş ve makineler korunur.
 - **Ayarlar:**
@@ -318,7 +318,7 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - Makineler yeniden adlandırılabilir, arşivlenebilir ve arşivden geri alınabilir. Kaydı olan makinenin birimi kilitlidir.
 - "Programı sıfırla" eklenir. Gerekirse bu aşama ikiye bölünür.
 - Aşama ikiye bölündü:
-  - **10a Program düzenleyici:** ana ekrandaki "Programı düzenle" bağlantısıyla açılır. Günler eklenir, adlandırılır, ↑ ↓ ile sıralanır ve onayla silinir. Günün satırları eklenir, düzenlenir, sıralanır ve onayla silinir. Satır formunda hareket katalogdan seçilir ya da "+ Yeni hareket" ile oluşturulur, "Adı düzelt" adı her yerde değiştirir, isteğe bağlı ikinci hareket satırı dönüşümlü yapar, hedef set 1–10 ve tekrar 1–100 arasıdır (en çok tekrar boşsa en azla aynı). Bir hareket bir günde yalnızca bir satırda olur. Devam eden antrenman başladığı hâliyle sürer; onun günü silinemez ve devam eden antrenman varken program sıfırlanamaz. Düzenlenmiş program, başlangıç programı sonradan yükseltilse de günlerini korur.
+  - **10a Program düzenleyici:** ana ekrandaki "Programı düzenle" bağlantısıyla açılır. Günler eklenir, adlandırılır, ↑ ↓ ile sıralanır ve onayla silinir. Günün satırları eklenir, düzenlenir, sıralanır ve onayla silinir. Satır formunda hareket katalogdan seçilir ya da "+ Yeni hareket" ile oluşturulur, "Adı düzelt" adı her yerde değiştirir, isteğe bağlı ikinci hareket satırı dönüşümlü yapar, hedef set 1–10 ve tekrar 1–100 arasıdır. Sonradan kullanıcının isteğiyle en az tekrar kutusu kaldırıldı: hedef "set × en çok tekrar" olarak girilir ve her yerde öyle gösterilir ("3 × 10–12" yerine "3 × 12"). Bir hareket bir günde yalnızca bir satırda olur. Devam eden antrenman başladığı hâliyle sürer; onun günü silinemez ve devam eden antrenman varken program sıfırlanamaz. Düzenlenmiş program, başlangıç programı sonradan yükseltilse de günlerini korur.
   - **10b Makine yönetimi ve "+ Hareket ekle":** makineleri yeniden adlandırma, arşivden geri alma, kaydı olmayan makinenin birimini değiştirme; antrenmana yalnızca o seferlik hareket ekleme.
     - Makineler salonda eklendiği yerde, antrenman kartının "Düzenle" modunda yönetilir: "Değiştir" (ad ve birim; kaydı olan makinede birim kilitli), "Sil" ve "Silinmiş makineler" altında "Geri al". Program satır formu hareketin makinelerini yalnızca listeler; iki yerde aynı düzenleyici olmasın diye.
     - "+ Hareket ekle" antrenman ekranının altındadır (geçmiş düzenlemede de var). Hareket katalogdan seçilir ya da yeni oluşturulur; hedef, hareketin programdaki satırından gelir, değiştirilebilir. Eklenen kart "Yalnızca bu antrenmana eklendi" yazar ve "Kaldır" ile çıkarılır; program değişmez.

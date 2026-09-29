@@ -183,7 +183,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     message: '',
     busy: false,
     ending: false, // bitirme ya da silme sürüyor: taslak artık kaydedilmez
-    extraForm: null, // "+ Hareket ekle" formu: { exerciseId, name, sets, repMin, repMax, targetTouched, error, field }
+    extraForm: null, // "+ Hareket ekle" formu: { exerciseId, name, sets, repMax, targetTouched, error, field }
     saved: false, // bitirildi ya da silindi
     timer: null,
     retry: null, // "Tekrar dene"nin yeniden çalıştıracağı işlem
@@ -249,11 +249,11 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       .filter(([id]) => !inCards.has(id))
       .sort(([, a], [, b]) => a.name.localeCompare(b.name, 'tr'));
     const invalid = (field) => (form.field === field ? ' aria-invalid="true"' : '');
-    const number = (name, label, placeholder = '') => `
+    const number = (name, label) => `
       <div class="field">
         <label for="extra-${name}">${label}</label>
         <input id="extra-${name}" name="${name}" type="text" inputmode="numeric" autocomplete="off"
-          value="${escapeHtml(form[name])}" placeholder="${placeholder}"${invalid(name)}>
+          value="${escapeHtml(form[name])}"${invalid(name)}>
       </div>`;
     return `
       <form class="card extra-form" data-form="extra" novalidate>
@@ -277,8 +277,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
           <legend>Hedef</legend>
           <div class="target-fields">
             ${number('sets', 'Set')}
-            ${number('repMin', 'En az tekrar')}
-            ${number('repMax', 'En çok tekrar', 'aynı')}
+            ${number('repMax', 'En çok tekrar')}
           </div>
         </fieldset>
         <p class="message" role="alert">${escapeHtml(form.error)}</p>
@@ -734,7 +733,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     const { target } = event;
     if (target.closest('[data-form="extra"]')) {
       if (target.name in state.extraForm) state.extraForm[target.name] = target.value;
-      if (['sets', 'repMin', 'repMax'].includes(target.name)) state.extraForm.targetTouched = true;
+      if (['sets', 'repMax'].includes(target.name)) state.extraForm.targetTouched = true;
       return;
     }
     const cardElement = target.closest('[data-card]');
@@ -787,8 +786,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       const planned = programTarget(state.program, target.value);
       if (planned && !form.targetTouched) {
         form.sets = String(planned.sets);
-        form.repMin = String(planned.repMin);
-        form.repMax = planned.repMax === planned.repMin ? '' : String(planned.repMax);
+        form.repMax = String(planned.repMax);
       }
       render();
       container.querySelector(form.exerciseId === NEW ? '#extra-name' : '#extra-exercise')?.focus();
@@ -889,7 +887,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
         restoreMachine(index, actionElement.dataset.equipment);
         break;
       case 'open-extra':
-        state.extraForm = { exerciseId: '', name: '', sets: '3', repMin: '', repMax: '', targetTouched: false, error: '', field: null };
+        state.extraForm = { exerciseId: '', name: '', sets: '3', repMax: '', targetTouched: false, error: '', field: null };
         render();
         container.querySelector('#extra-exercise').focus();
         break;

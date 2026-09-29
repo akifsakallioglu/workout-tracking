@@ -262,8 +262,7 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
       second: existing?.options[1] ?? '',
       secondName: '',
       sets: String(existing?.sets ?? 3),
-      repMin: existing ? String(existing.repMin) : '',
-      repMax: existing && existing.repMax !== existing.repMin ? String(existing.repMax) : '',
+      repMax: existing ? String(existing.repMax) : '',
     },
     rename: null, // { field, name, error }: "Adı düzelt" formu açıkken
     error: '',
@@ -290,8 +289,7 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
           <legend>Hedef</legend>
           <div class="target-fields">
             ${numberFieldHtml('sets', 'Set', form.sets)}
-            ${numberFieldHtml('repMin', 'En az tekrar', form.repMin)}
-            ${numberFieldHtml('repMax', 'En çok tekrar', form.repMax, 'aynı')}
+            ${numberFieldHtml('repMax', 'En çok tekrar', form.repMax)}
           </div>
         </fieldset>
         <p id="item-message" class="message" role="alert">${escapeHtml(state.error)}</p>
@@ -342,12 +340,12 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
       </div>`;
   }
 
-  function numberFieldHtml(name, label, value, placeholder = '') {
+  function numberFieldHtml(name, label, value) {
     return `
       <div class="field">
         <label for="${name}">${label}</label>
         <input id="${name}" name="${name}" type="text" inputmode="numeric" autocomplete="off" value="${escapeHtml(value)}"
-          placeholder="${placeholder}"${state.field === name ? ' aria-invalid="true"' : ''}>
+          ${state.field === name ? ' aria-invalid="true"' : ''}>
       </div>`;
   }
 

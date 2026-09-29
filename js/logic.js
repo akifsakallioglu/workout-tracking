@@ -390,9 +390,10 @@ export function formatSets(sets, unit) {
   return sets.map((set) => formatSet(set, unit)).join(' · ');
 }
 
-// "3 × 12–15"; alt ve üst sınır aynıysa "4 × 15"
-export function formatTarget({ sets, repMin, repMax }) {
-  return `${sets} × ${repMin === repMax ? repMin : `${repMin}–${repMax}`}`;
+// "3 × 15": set sayısı × en çok tekrar. En az tekrar kullanılmaz; başlangıç programındaki aralıklarda
+// (10–12) da yalnızca en çok tekrar gösterilir.
+export function formatTarget({ sets, repMax }) {
+  return `${sets} × ${repMax}`;
 }
 
 // "21 Eyl"; başka bir yıldaysa "21 Eyl 2025"
@@ -694,20 +695,17 @@ export function exerciseNameError(program, name, exerciseId = null) {
   return taken ? 'Bu adda bir hareket zaten var.' : '';
 }
 
-// Hedef kutuları: set 1–10, tekrar 1–100; en çok tekrar boşsa en az tekrarla aynıdır ("4 × 15").
-export function parseTarget({ sets, repMin, repMax }) {
+// Hedef kutuları: set 1–10, en çok tekrar 1–100. En az tekrar formlarda yoktur; veride en çok
+// tekrara eşit tutulur (kayıt biçimi ve eski yedekler değişmesin).
+export function parseTarget({ sets, repMax }) {
   const count = (text, max) => {
     const value = parseReps(text);
     return value !== null && value <= max ? value : NaN;
   };
-  const target = { sets: count(sets, MAX_SETS), repMin: count(repMin, MAX_REPS) };
+  const target = { sets: count(sets, MAX_SETS), repMax: count(repMax, MAX_REPS) };
   if (Number.isNaN(target.sets)) return { error: `Set sayısı 1 ile ${MAX_SETS} arasında bir tam sayı olmalı.`, field: 'sets' };
-  if (Number.isNaN(target.repMin)) return { error: `En az tekrar 1 ile ${MAX_REPS} arasında bir tam sayı olmalı.`, field: 'repMin' };
-  target.repMax = String(repMax ?? '').trim() ? count(repMax, MAX_REPS) : target.repMin;
-  if (Number.isNaN(target.repMax) || target.repMax < target.repMin) {
-    return { error: 'En çok tekrar, en az tekrardan küçük olamaz (en fazla 100).', field: 'repMax' };
-  }
-  return { target };
+  if (Number.isNaN(target.repMax)) return { error: `En çok tekrar 1 ile ${MAX_REPS} arasında bir tam sayı olmalı.`, field: 'repMax' };
+  return { target: { sets: target.sets, repMin: target.repMax, repMax: target.repMax } };
 }
 
 // Satırın hareketleri: aynı hareket iki kez seçilemez ve bir hareket bir günde yalnızca bir satırda
@@ -803,7 +801,7 @@ export function resetProgram(program, seed) {
 export function programTarget(program, exerciseId) {
   for (const day of program.days) {
     const item = day.items.find((candidate) => candidate.options.includes(exerciseId));
-    if (item) return { sets: item.sets, repMin: item.repMin, repMax: item.repMax };
+    if (item) return { sets: item.sets, repMax: item.repMax };
   }
   return null;
 }

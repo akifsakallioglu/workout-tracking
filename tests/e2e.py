@@ -301,11 +301,11 @@ def program_steps(run):
             "Overhead Rope Extension",
         ])
         expect(page.locator("[data-card] .target")).to_have_text([
-            "Hedef 3 × 10–12",
-            "Hedef 3 × 12–15",
+            "Hedef 3 × 12",
+            "Hedef 3 × 15",
             "Hedef 4 × 15",
-            "Hedef 3 × 10–12",
-            "Hedef 3 × 12–15",
+            "Hedef 3 × 12",
+            "Hedef 3 × 15",
             "Hedef 2 × 15",
         ])
         expect(page.locator("[data-card] .no-machine")).to_have_count(6)
@@ -323,7 +323,7 @@ def program_steps(run):
         open_day(page, "upper", "Upper")
         expect(page.locator("[data-card]")).to_have_count(6)
         overhead = card(page, "Overhead Rope Extension")
-        expect(overhead.locator(".target")).to_have_text("Hedef 3 × 12–15")
+        expect(overhead.locator(".target")).to_have_text("Hedef 3 × 15")
         go_home(page)
 
     def lower_bodyweight(page):
@@ -354,7 +354,7 @@ def program_steps(run):
     return [
         ("Ana ekran: 'Sıradaki' Push; 5 gün ve hareket sayıları", home_screen),
         ("Push: 6 hareket programdaki sırayla ve hedeflerle; hiçbirinde varsayılan makine yok", push_cards),
-        ("Upper: Overhead Rope Extension 3 × 12–15 (Push'ta 2 × 15)", upper_cards),
+        ("Upper: Overhead Rope Extension 3 × 15 (Push'ta 2 × 15)", upper_cards),
         ("Lower: elle eklenen ağırlıksız makinede ağırlık kutusu yok", lower_bodyweight),
         ("Pull: dönüşümlü satırda hareket elle seçiliyor; makine listesi harekete göre", pull_alternatives),
     ]
@@ -1127,7 +1127,7 @@ def history_steps(run):
         entry = page.locator(".entry")
         expect(entry.locator("h2")).to_have_text("Rope Pushdown · Kablo")
         expect(entry.locator(".entry-sets")).to_have_text("40 kg × 12 · 11 · 10")
-        expect(entry.locator(".muted")).to_have_text("Hedef 3 × 12–15")
+        expect(entry.locator(".muted")).to_have_text("Hedef 3 × 15")
         page.screenshot(path=str(ARTIFACTS / "asama8-ayrinti.png"))
 
     def edit_uses_earlier_records(page):
@@ -1409,9 +1409,8 @@ def item_message(page):
     return page.locator("#item-message")
 
 
-def fill_target(page, sets, rep_min, rep_max):
+def fill_target(page, sets, rep_max):
     page.get_by_label("Set", exact=True).fill(sets)
-    page.get_by_label("En az tekrar", exact=True).fill(rep_min)
     page.get_by_label("En çok tekrar", exact=True).fill(rep_max)
 
 
@@ -1467,28 +1466,29 @@ def program_editor_steps(run):
         save_item(page)
         expect(item_message(page)).to_have_text("Bu adda bir hareket zaten var.")
         page.get_by_label("Yeni hareketin adı").fill("Cable Curl")
-        fill_target(page, "3", "10", "8")
+        expect(page.get_by_label("En az tekrar", exact=True)).to_have_count(0)
+        fill_target(page, "3", "")
         save_item(page)
-        expect(item_message(page)).to_have_text("En çok tekrar, en az tekrardan küçük olamaz (en fazla 100).")
+        expect(item_message(page)).to_have_text("En çok tekrar 1 ile 100 arasında bir tam sayı olmalı.")
         expect(page.get_by_label("En çok tekrar", exact=True)).to_have_attribute("aria-invalid", "true")
         page.get_by_label("En çok tekrar", exact=True).fill("12")
         page.screenshot(path=str(ARTIFACTS / "asama10-satir.png"), full_page=True)
         save_item(page)
         expect(page.locator("#flash")).to_have_text("Satır kaydedildi ✓")
         expect(program_rows(page).first.locator(".day-name")).to_have_text("Cable Curl")
-        expect(program_rows(page).first.locator(".muted")).to_have_text("Hedef 3 × 10–12")
+        expect(program_rows(page).first.locator(".muted")).to_have_text("Hedef 3 × 12")
 
         page.get_by_role("link", name="+ Satır ekle").click()
         page.get_by_label("Hareket", exact=True).select_option(label="Wrist Curl")
         page.get_by_label("İkinci hareket (isteğe bağlı)").select_option(label="Reverse Curl")
-        fill_target(page, "2", "15", "")
+        fill_target(page, "2", "15")
         save_item(page)
         expect(program_rows(page).nth(1).locator(".day-name")).to_have_text("Wrist Curl / Reverse Curl")
         expect(program_rows(page).nth(1).locator(".muted")).to_have_text("Hedef 2 × 15")
 
         page.get_by_role("link", name="+ Satır ekle").click()
         page.get_by_label("Hareket", exact=True).select_option(label="Cable Curl")
-        fill_target(page, "3", "10", "")
+        fill_target(page, "3", "10")
         save_item(page)
         expect(item_message(page)).to_have_text("Cable Curl bu günde zaten var.")
         page.once("dialog", lambda dialog: dialog.dismiss())
@@ -1508,7 +1508,7 @@ def program_editor_steps(run):
         page.locator(".days .day").filter(has_text="Arms").click()
         expect(page.locator(".topbar h1")).to_have_text("Arms")
         expect(page.locator("[data-card] h2")).to_have_text(["Wrist Curl / Reverse Curl", "Cable Curl"])
-        expect(card(page, "Cable Curl").locator(".target")).to_have_text("Hedef 3 × 10–12")
+        expect(card(page, "Cable Curl").locator(".target")).to_have_text("Hedef 3 × 12")
         expect(card(page, "Cable Curl").locator(".no-machine")).to_have_count(1)
         go_home(page)
 
@@ -1519,23 +1519,27 @@ def program_editor_steps(run):
         log_sets(rope, "40", ["12", "12", "12"])
         finish(page)
         expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
-        open_program_row(page, "Push", "Rope Pushdown")
+        open_program_row(page, "Push", "Overhead Rope Extension")
+        expect(page.get_by_label("En çok tekrar", exact=True)).to_have_value("15")  # "2 × 15": kutu boş değil
+        page.get_by_role("link", name="Vazgeç").click()
+        program_rows(page).filter(has=page.get_by_text("Rope Pushdown", exact=True)).click()
         expect(page.get_by_label("Hareket", exact=True)).to_have_value("rope-pushdown")
         expect(page.get_by_label("Set", exact=True)).to_have_value("3")
-        fill_target(page, "4", "10", "12")
+        expect(page.get_by_label("En çok tekrar", exact=True)).to_have_value("15")  # "12–15": en çok tekrar
+        fill_target(page, "4", "12")
         save_item(page)
-        expect(program_rows(page).filter(has_text="Rope Pushdown").locator(".muted")).to_have_text("Hedef 4 × 10–12")
+        expect(program_rows(page).filter(has_text="Rope Pushdown").locator(".muted")).to_have_text("Hedef 4 × 12")
         page.get_by_role("link", name="← Program").click()
         page.get_by_role("link", name="← Günler").click()
         open_day(page, "push", "Push")
         rope = card(page, "Rope Pushdown")
-        expect(rope.locator(".target")).to_have_text("Hedef 4 × 10–12")
+        expect(rope.locator(".target")).to_have_text("Hedef 4 × 12")
         expect(reps_inputs(rope)).to_have_count(4)
         expect(last_time(rope)).to_contain_text("40 kg × 12 · 12 · 12")
         go_home(page)
         page.get_by_role("link", name="Geçmiş").click()
         history_rows(page).first.click()
-        expect(page.locator(".entry .muted")).to_have_text("Hedef 3 × 12–15")
+        expect(page.locator(".entry .muted")).to_have_text("Hedef 3 × 15")
         page.get_by_role("link", name="← Geçmiş").click()
         page.get_by_role("link", name="← Günler").click()
 
@@ -1641,7 +1645,7 @@ def program_editor_steps(run):
         page.get_by_role("link", name="← Günler").click()
         open_day(page, "push", "Push")
         rope_card = card(page, "Rope Pushdown")
-        expect(rope_card.locator(".target")).to_have_text("Hedef 3 × 12–15")
+        expect(rope_card.locator(".target")).to_have_text("Hedef 3 × 15")
         expect(last_time(rope_card)).to_contain_text("40 kg × 12 · 12 · 12")
         go_home(page)
         page.emulate_media(color_scheme="dark")
@@ -1767,12 +1771,12 @@ def machine_management_steps(run):
         expect(form.locator("option", has_text="Face Pull")).to_have_count(0)  # bu antrenmanda zaten var
         form.get_by_label("Hareket", exact=True).select_option(label="Rope Pushdown")
         expect(form.get_by_label("Set", exact=True)).to_have_value("3")
-        expect(form.get_by_label("En az tekrar", exact=True)).to_have_value("12")
+        expect(form.get_by_label("En az tekrar", exact=True)).to_have_count(0)
         expect(form.get_by_label("En çok tekrar", exact=True)).to_have_value("15")
         form.get_by_role("button", name="Ekle").click()
         rope = card(page, "Rope Pushdown")
         expect(rope.locator(".extra-row .muted")).to_have_text("Yalnızca bu antrenmana eklendi")
-        expect(rope.locator(".target")).to_have_text("Hedef 3 × 12–15")
+        expect(rope.locator(".target")).to_have_text("Hedef 3 × 15")
         expect(radio(rope, "Halat · kg")).to_be_checked()
         expect(last_time(rope)).to_have_text("Bu makinede önceki kayıt yok")  # Push kaydı Pull'a karışmaz
 
@@ -1785,13 +1789,12 @@ def machine_management_steps(run):
         form.get_by_role("button", name="Ekle").click()
         expect(form.locator(".message")).to_have_text("Bu adda bir hareket zaten var.")
         form.get_by_label("Yeni hareketin adı").fill("Hammer Curl")
-        form.get_by_label("En az tekrar", exact=True).fill("10")
         form.get_by_label("En çok tekrar", exact=True).fill("12")
         page.screenshot(path=str(ARTIFACTS / "asama10-hareket-ekle.png"), full_page=True)
         form.get_by_role("button", name="Ekle").click()
         expect(save_status(page)).to_have_text("Hareket eklendi ✓")
         hammer = card(page, "Hammer Curl")
-        expect(hammer.locator(".target")).to_have_text("Hedef 3 × 10–12")
+        expect(hammer.locator(".target")).to_have_text("Hedef 3 × 12")
         expect(hammer.locator(".no-machine")).to_have_count(1)
         add_machine(hammer, "Dambıl", "kg")
         log_sets(hammer, "12", ["10", "10"])
@@ -1814,7 +1817,7 @@ def machine_management_steps(run):
         expect(page.locator("#flash")).to_have_text("Pull antrenmanı kaydedildi ✓")
         pull = next(session for session in sessions(page) if session["dayId"] == "pull")
         entry = pull["entries"][0]
-        assert (entry["name"], entry["target"]) == ("Hammer Curl", {"sets": 3, "repMin": 10, "repMax": 12}), entry
+        assert (entry["name"], entry["target"]) == ("Hammer Curl", {"sets": 3, "repMin": 12, "repMax": 12}), entry
         program = stored_program(page)
         assert len(program["days"][1]["items"]) == 8, "Program değişmemeli"
         assert "customized" not in program, program.keys()
@@ -1836,7 +1839,7 @@ def machine_management_steps(run):
         page.get_by_role("link", name="Düzenle").click()
         page.get_by_role("button", name="+ Hareket ekle").click()
         extra_form(page).get_by_label("Hareket", exact=True).select_option(label="Cable Row")
-        expect(extra_form(page).get_by_label("En az tekrar", exact=True)).to_have_value("12")
+        expect(extra_form(page).get_by_label("En çok tekrar", exact=True)).to_have_value("12")
         extra_form(page).get_by_role("button", name="Ekle").click()
         row = card(page, "Cable Row")
         add_machine(row, "Kablo", "kg")
@@ -2068,13 +2071,13 @@ def target_copy_steps(run):
         page.reload()
         open_day(page, "push", "Push")
         rope = card(page, "Rope Pushdown")
-        expect(rope.locator(".target")).to_have_text("Hedef 4 × 12–20")
+        expect(rope.locator(".target")).to_have_text("Hedef 4 × 20")
         expect(reps_inputs(rope)).to_have_count(4)
         entry = sessions(page)[0]["entries"][0]
         assert entry["target"] == {"sets": 3, "repMin": 12, "repMax": 15}, entry["target"]
 
     return [
-        ("Push kaydediliyor (hedef 3 × 12–15)", save_push),
+        ("Push kaydediliyor (hedef 3 × 15)", save_push),
         ("Programdaki hedef değişince yeni antrenman yeni hedefi alıyor; eski kayıt eski hedefi taşıyor", new_target_old_record),
     ]
 

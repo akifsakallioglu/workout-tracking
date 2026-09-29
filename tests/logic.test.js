@@ -106,15 +106,15 @@ test('başlangıç programı: satır sayıları, sıra ve hedefler yapıştırı
   assertEqual(counts, { Push: 6, Pull: 8, Legs: 8, Upper: 6, Lower: 6 });
   const push = seed.days[0].items.map((item) => `${itemTitle(item, seed.exercises)} ${formatTarget(item)}`);
   assertEqual(push, [
-    'Machine Chest Press 3 × 10–12',
-    'Cable Fly 3 × 12–15',
+    'Machine Chest Press 3 × 12',
+    'Cable Fly 3 × 15',
     'Seated Lateral Raise 4 × 15',
-    'Machine Shoulder Press 3 × 10–12',
-    'Rope Pushdown 3 × 12–15',
+    'Machine Shoulder Press 3 × 12',
+    'Rope Pushdown 3 × 15',
     'Overhead Rope Extension 2 × 15',
   ]);
   const upper = seed.days.find((day) => day.id === 'upper');
-  assertEqual(formatTarget(upper.items.at(-1)), '3 × 12–15', 'Upper’daki Overhead Rope Extension');
+  assertEqual(formatTarget(upper.items.at(-1)), '3 × 15', 'Upper’daki Overhead Rope Extension');
   const pull = seed.days.find((day) => day.id === 'pull');
   assertEqual(itemTitle(pull.items.at(-1), seed.exercises), 'Wrist Curl / Reverse Curl');
 });
@@ -320,7 +320,7 @@ test('setler birime göre yazılıyor', () => {
   assertEqual(formatSets(same(null, 15, 14), 'none'), '15 · 14');
   assertEqual(formatSets([{ weight: 50, reps: 12 }, { weight: 52.5, reps: 10 }], 'kg'), '50×12 · 52,5×10');
   assertEqual(formatSet({ weight: 10, reps: 12 }, 'level'), '10k×12');
-  assertEqual(formatTarget({ sets: 3, repMin: 12, repMax: 15 }), '3 × 12–15');
+  assertEqual(formatTarget({ sets: 3, repMin: 12, repMax: 15 }), '3 × 15', 'eski aralıklarda en çok tekrar');
   assertEqual(formatTarget({ sets: 4, repMin: 15, repMax: 15 }), '4 × 15');
 });
 
@@ -849,15 +849,13 @@ test('sıradaki gün programdaki yeni sıraya göre; silinen günden sonra ilk g
   assertEqual(nextDayId(withoutDay(custom, 'upper'), done('upper')), 'push');
 });
 
-test('hedef kutuları: set 1–10, tekrar 1–100; en çok tekrar boşsa en azla aynı', () => {
-  assertEqual(parseTarget({ sets: '3', repMin: '10', repMax: '12' }), { target: { sets: 3, repMin: 10, repMax: 12 } });
-  assertEqual(parseTarget({ sets: '4', repMin: '15', repMax: '' }), { target: { sets: 4, repMin: 15, repMax: 15 } });
-  assertEqual(parseTarget({ sets: '0', repMin: '10', repMax: '' }).field, 'sets');
-  assertEqual(parseTarget({ sets: '11', repMin: '10', repMax: '' }).field, 'sets');
-  assertEqual(parseTarget({ sets: '3', repMin: '', repMax: '12' }).field, 'repMin');
-  assertEqual(parseTarget({ sets: '3', repMin: '2,5', repMax: '' }).field, 'repMin');
-  assertEqual(parseTarget({ sets: '3', repMin: '12', repMax: '10' }).field, 'repMax');
-  assertEqual(parseTarget({ sets: '3', repMin: '12', repMax: '101' }).field, 'repMax');
+test('hedef kutuları: set 1–10, en çok tekrar 1–100; en az tekrar veride en çok tekrara eşit', () => {
+  assertEqual(parseTarget({ sets: '3', repMax: '12' }), { target: { sets: 3, repMin: 12, repMax: 12 } });
+  assertEqual(parseTarget({ sets: '0', repMax: '12' }).field, 'sets');
+  assertEqual(parseTarget({ sets: '11', repMax: '12' }).field, 'sets');
+  assertEqual(parseTarget({ sets: '3', repMax: '' }), { error: 'En çok tekrar 1 ile 100 arasında bir tam sayı olmalı.', field: 'repMax' });
+  assertEqual(parseTarget({ sets: '3', repMax: '2,5' }).field, 'repMax');
+  assertEqual(parseTarget({ sets: '3', repMax: '101' }).field, 'repMax');
 });
 
 test('satır ekleme, düzenleme, sıralama, silme; bir hareket bir günde tek satırda', () => {
@@ -956,8 +954,9 @@ test('silinmiş makine geri alınıyor; aynı adda etkin makine varken alınmıy
 });
 
 test('"+ Hareket ekle": hedef hareketin programdaki ilk satırından; katalog değişikliği programı "düzenlendi" yapmaz', () => {
-  assertEqual(programTarget(seed, 'overhead-rope-extension'), { sets: 2, repMin: 15, repMax: 15 }, 'ilk bulunduğu gün Push');
-  assertEqual(programTarget(seed, 'reverse-curl'), { sets: 2, repMin: 15, repMax: 15 }, 'dönüşümlü satırın ikinci hareketi');
+  assertEqual(programTarget(seed, 'overhead-rope-extension'), { sets: 2, repMax: 15 }, 'ilk bulunduğu gün Push');
+  assertEqual(programTarget(seed, 'rope-pushdown'), { sets: 3, repMax: 15 }, 'aralıkta en çok tekrar');
+  assertEqual(programTarget(seed, 'reverse-curl'), { sets: 2, repMax: 15 }, 'dönüşümlü satırın ikinci hareketi');
   assertEqual(programTarget(withExercise(program(), 'ex-1', 'Cable Curl'), 'ex-1'), null);
   assertEqual(withExercise(program(), 'ex-1', 'Cable Curl').customized, undefined);
   assertEqual(renamedExercise(program(), 'rope-pushdown', 'Triceps Rope').customized, undefined);
