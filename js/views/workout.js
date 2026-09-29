@@ -195,6 +195,8 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       <div class="cards">
         ${state.cards.map((card, index) => cardHtml(card, index, cardContext())).join('')}
       </div>
+      ${state.cards.length ? '' : `
+        <p class="muted empty-state">Bu günde hareket yok. <a href="#/program/${escapeHtml(day.id)}">Satır ekleyin</a></p>`}
       ${editing ? '' : `
         <div class="page-actions">
           <button type="button" class="button danger" data-action="cancel"${disabled}>Antrenmanı iptal et</button>

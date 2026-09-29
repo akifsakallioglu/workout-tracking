@@ -232,7 +232,8 @@ export function upgradeProgram(stored, seed, used = new Set()) {
     const existing = stored.exercises[id];
     exercises[id] = existing ? { ...existing, equipment: existing.equipment.flatMap(withoutDefaults) } : exercise;
   }
-  return { ...stored, seedVersion: seed.seedVersion, exercises, days: seed.days };
+  // Kullanıcı programı düzenlediyse (customized) günler onun hâlinde kalır.
+  return { ...stored, seedVersion: seed.seedVersion, exercises, days: stored.customized ? stored.days : seed.days };
 }
 
 // Yeni makinenin adı ve birimi için denetim; sorun yoksa boş metin. Birimi kullanıcı seçer:
@@ -455,6 +456,7 @@ function backupError(data) {
 
   const { program, sessions } = data;
   if (!isObject(program) || !isObject(program.exercises) || !Array.isArray(program.days)) return corrupt('program okunamadı');
+  if (!program.days.length) return corrupt('programda gün yok');
   for (const [id, exercise] of Object.entries(program.exercises)) {
     if (!isObject(exercise) || !isText(exercise.name) || !Array.isArray(exercise.equipment)) {
       return corrupt(`"${id}" hareketi okunamadı`);
@@ -639,4 +641,137 @@ export function progressIndex(program, sessions) {
     .map(([, record]) => record)
     .sort((a, b) => a.dayName.localeCompare(b.dayName, 'tr') || a.name.localeCompare(b.name, 'tr'));
   return { days, other };
+}
+
+// ---------------------------------------------------------------- Program düzenleyici
+
+// Programı değiştiren her işlem yeni bir program döndürür ve onu "düzenlendi" (customized) olarak
+// işaretler: başlangıç programı sonradan yükseltilse de kullanıcının günleri korunur.
+const customized = (program, changes) => ({ ...program, ...changes, customized: true });
+const sameName = (a, b) => a.trim().toLocaleLowerCase('tr') === b.trim().toLocaleLowerCase('tr');
+const MAX_SETS = 10;
+const MAX_REPS = 100;
+
+export function dayNameError(program, name, dayId = null) {
+  const trimmed = name.trim();
+  if (!trimmed) return 'Güne bir ad verin.';
+  if (trimmed.length > 30) return 'Gün adı en fazla 30 karakter olabilir.';
+  if (program.days.some((day) => day.id !== dayId && sameName(day.name, trimmed))) return 'Bu adda bir gün zaten var.';
+  return '';
+}
+
+export function exerciseNameError(program, name, exerciseId = null) {
+  const trimmed = name.trim();
+  if (!trimmed) return 'Harekete bir ad verin.';
+  if (trimmed.length > 60) return 'Hareket adı en fazla 60 karakter olabilir.';
+  const taken = Object.entries(program.exercises).some(([id, exercise]) => id !== exerciseId && sameName(exercise.name, trimmed));
+  return taken ? 'Bu adda bir hareket zaten var.' : '';
+}
+
+// Hedef kutuları: set 1–10, tekrar 1–100; en çok tekrar boşsa en az tekrarla aynıdır ("4 × 15").
+export function parseTarget({ sets, repMin, repMax }) {
+  const count = (text, max) => {
+    const value = parseReps(text);
+    return value !== null && value <= max ? value : NaN;
+  };
+  const target = { sets: count(sets, MAX_SETS), repMin: count(repMin, MAX_REPS) };
+  if (Number.isNaN(target.sets)) return { error: `Set sayısı 1 ile ${MAX_SETS} arasında bir tam sayı olmalı.`, field: 'sets' };
+  if (Number.isNaN(target.repMin)) return { error: `En az tekrar 1 ile ${MAX_REPS} arasında bir tam sayı olmalı.`, field: 'repMin' };
+  target.repMax = String(repMax ?? '').trim() ? count(repMax, MAX_REPS) : target.repMin;
+  if (Number.isNaN(target.repMax) || target.repMax < target.repMin) {
+    return { error: 'En çok tekrar, en az tekrardan küçük olamaz (en fazla 100).', field: 'repMax' };
+  }
+  return { target };
+}
+
+// Satırın hareketleri: aynı hareket iki kez seçilemez ve bir hareket bir günde yalnızca bir satırda
+// olur (geçmişin anahtarı gün + hareket + makine; iki satır aynı kaydı paylaşmasın).
+export function itemOptionsError(program, dayId, itemId, options) {
+  if (new Set(options).size !== options.length) return 'İki hareket aynı olamaz.';
+  const day = program.days.find((candidate) => candidate.id === dayId);
+  for (const item of day.items) {
+    if (item.id === itemId) continue;
+    const duplicate = item.options.find((option) => options.includes(option));
+    if (duplicate) return `${program.exercises[duplicate].name} bu günde zaten var.`;
+  }
+  return '';
+}
+
+const mapDays = (program, dayId, change) =>
+  customized(program, { days: program.days.map((day) => (day.id === dayId ? change(day) : day)) });
+
+function moved(list, index, delta) {
+  const target = index + delta;
+  if (index < 0 || target < 0 || target >= list.length) return list;
+  const copy = [...list];
+  [copy[index], copy[target]] = [copy[target], copy[index]];
+  return copy;
+}
+
+// Yeni gün programın sonuna eklenir.
+export function withDay(program, id, name) {
+  return customized(program, { days: [...program.days, { id, name: name.trim(), items: [] }] });
+}
+
+export function renamedDay(program, dayId, name) {
+  return mapDays(program, dayId, (day) => ({ ...day, name: name.trim() }));
+}
+
+// Gün silinir; o güne ait geçmiş kayıtlar durur (İlerleme'de "Programda olmayan" altında).
+export function withoutDay(program, dayId) {
+  return customized(program, { days: program.days.filter((day) => day.id !== dayId) });
+}
+
+// Günlerin sırası "Sıradaki" gününün sırasıdır. delta: -1 yukarı, +1 aşağı.
+export function movedDay(program, dayId, delta) {
+  const index = program.days.findIndex((day) => day.id === dayId);
+  return customized(program, { days: moved(program.days, index, delta) });
+}
+
+// Satır aynı kimlikle varsa yerinde değişir, yoksa günün sonuna eklenir.
+export function withItem(program, dayId, item) {
+  return mapDays(program, dayId, (day) => ({
+    ...day,
+    items: day.items.some((candidate) => candidate.id === item.id)
+      ? day.items.map((candidate) => (candidate.id === item.id ? item : candidate))
+      : [...day.items, item],
+  }));
+}
+
+export function withoutItem(program, dayId, itemId) {
+  return mapDays(program, dayId, (day) => ({ ...day, items: day.items.filter((item) => item.id !== itemId) }));
+}
+
+export function movedItem(program, dayId, itemId, delta) {
+  return mapDays(program, dayId, (day) => ({
+    ...day,
+    items: moved(day.items, day.items.findIndex((item) => item.id === itemId), delta),
+  }));
+}
+
+// Yeni hareket makinesiz başlar; makineleri kullanıcı antrenman kartında ekler.
+export function withExercise(program, exerciseId, name) {
+  return customized(program, {
+    exercises: { ...program.exercises, [exerciseId]: { name: name.trim(), equipment: [] } },
+  });
+}
+
+// "Adı düzelt": ad her günde değişir. Kimlik aynı kaldığı için geçmiş kopmaz; eski kayıtlar
+// antrenman sırasında kopyalanan adı gösterir.
+export function renamedExercise(program, exerciseId, name) {
+  const exercise = program.exercises[exerciseId];
+  return customized(program, {
+    exercises: { ...program.exercises, [exerciseId]: { ...exercise, name: name.trim() } },
+  });
+}
+
+// "Programı sıfırla": günler, satırlar, hedefler ve başlangıç hareketlerinin adları başlangıç
+// programına döner. Makineler, kullanıcının eklediği hareketler ve geçmiş kayıtlar korunur.
+export function resetProgram(program, seed) {
+  const exercises = { ...program.exercises };
+  for (const [id, exercise] of Object.entries(seed.exercises)) {
+    exercises[id] = exercises[id] ? { ...exercises[id], name: exercise.name } : structuredClone(exercise);
+  }
+  const { customized: _, ...rest } = program;
+  return { ...rest, exercises, days: structuredClone(seed.days) };
 }

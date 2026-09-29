@@ -46,7 +46,10 @@ export async function renderHome(container, { flash }) {
         <a class="button ${active ? 'secondary' : 'primary'}" href="#/antrenman/${escapeHtml(next.id)}">Başla</a>
       </section>`}
 
-    <h2 class="section-title">Günler</h2>
+    <div class="section-head">
+      <h2 class="section-title">Günler</h2>
+      <a class="section-link" href="#/program">Programı düzenle</a>
+    </div>
     <ul class="days">
       ${program.days.map((day) => `
         <li>

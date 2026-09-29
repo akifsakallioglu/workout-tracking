@@ -785,6 +785,169 @@ a.button {
   white-space: nowrap;
 }
 
+/* Program düzenleyici */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 24px 0 8px;
+}
+
+.section-head .section-title {
+  margin: 0;
+}
+
+.section-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.program-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.program-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.program-link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 10px 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.move-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.button.small.icon {
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.125rem;
+}
+
+.program-form {
+  margin-top: 16px;
+}
+
+.inline-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.inline-form .field {
+  flex: 1;
+}
+
+.program-form .field + .field,
+.exercise-field + .exercise-field {
+  margin-top: 16px;
+}
+
+.field .sub-label {
+  margin-top: 10px;
+}
+
+.field-hint {
+  margin-top: 6px;
+  font-size: 0.875rem;
+}
+
+.target-fieldset {
+  margin-top: 16px;
+}
+
+.target-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.program-form .target-fields .field + .field {
+  margin-top: 0;
+}
+
+.link-button {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rename-form {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--subtle);
+}
+
+.rename-form .sub-label {
+  margin-top: 0;
+}
+
+.rename-form .actions {
+  margin-top: 8px;
+}
+
+.reset-section {
+  margin-top: 32px;
+}
+
+.reset-section h2 + p {
+  margin-top: 8px;
+}
+
+select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.0625rem; /* 16px altı iPhone'da odaklanınca ekranı yakınlaştırır */
+}
+
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+select[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
 /* Başka bir gün devam ederken */
 .conflict h1 {
   margin: 4px 0 8px;

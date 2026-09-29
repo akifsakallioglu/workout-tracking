@@ -317,6 +317,9 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - Günler ve satırlar eklenir, düzenlenir, sıralanır ve silinir. Hareket adı düzeltilebilir ve "+ Hareket ekle" gelir.
 - Makineler yeniden adlandırılabilir, arşivlenebilir ve arşivden geri alınabilir. Kaydı olan makinenin birimi kilitlidir.
 - "Programı sıfırla" eklenir. Gerekirse bu aşama ikiye bölünür.
+- Aşama ikiye bölündü:
+  - **10a Program düzenleyici:** ana ekrandaki "Programı düzenle" bağlantısıyla açılır. Günler eklenir, adlandırılır, ↑ ↓ ile sıralanır ve onayla silinir. Günün satırları eklenir, düzenlenir, sıralanır ve onayla silinir. Satır formunda hareket katalogdan seçilir ya da "+ Yeni hareket" ile oluşturulur, "Adı düzelt" adı her yerde değiştirir, isteğe bağlı ikinci hareket satırı dönüşümlü yapar, hedef set 1–10 ve tekrar 1–100 arasıdır (en çok tekrar boşsa en azla aynı). Bir hareket bir günde yalnızca bir satırda olur. Devam eden antrenman başladığı hâliyle sürer; onun günü silinemez ve devam eden antrenman varken program sıfırlanamaz. Düzenlenmiş program, başlangıç programı sonradan yükseltilse de günlerini korur.
+  - **10b Makine yönetimi ve "+ Hareket ekle":** makineleri yeniden adlandırma, arşivden geri alma, kaydı olmayan makinenin birimini değiştirme; antrenmana yalnızca o seferlik hareket ekleme.
 - *Bitti sayılır:*
   - Hedef değişince yeni antrenman yeni hedefle başlıyor, eski kayıtlar eski hedefi gösteriyor.
   - Adı değişen hareketin ya da makinenin geçmişi kopmuyor.

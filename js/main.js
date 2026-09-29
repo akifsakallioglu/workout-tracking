@@ -1,9 +1,11 @@
 // Açılış ve yönlendirme: #/ ana ekran, #/antrenman/<gün> antrenman ekranı, #/gecmis geçmiş,
 // #/gecmis/<kimlik> antrenmanın ayrıntısı, #/gecmis/<kimlik>/duzenle düzenleme, #/ilerleme ilerleme
-// listesi, #/ilerleme/<gün>/<hareket> grafik, #/ayarlar ayarlar.
+// listesi, #/ilerleme/<gün>/<hareket> grafik, #/program program düzenleyici, #/program/<gün> gün,
+// #/program/<gün>/<satır> satır (yeni satır: #/program/<gün>/yeni), #/ayarlar ayarlar.
 import { initStore, waitForWrites } from './store.js';
 import { renderHistory, renderSessionDetail } from './views/history.js';
 import { renderHome } from './views/home.js';
+import { renderDayEditor, renderItemEditor, renderProgram } from './views/program.js';
 import { renderProgressDetail, renderProgressList } from './views/progress.js';
 import { renderSettings } from './views/settings.js';
 import { renderWorkout } from './views/workout.js';
@@ -34,6 +36,7 @@ async function show() {
   const workout = hash.match(/^#\/antrenman\/([\w-]+)$/);
   const history = hash.match(/^#\/gecmis\/([\w-]+)(\/duzenle)?$/);
   const progress = hash.match(/^#\/ilerleme\/([\w-]+)\/([\w-]+)$/);
+  const programPath = hash.match(/^#\/program(?:\/([\w-]+)(?:\/([\w-]+))?)?$/);
   let shown;
   if (workout) shown = await renderWorkout(container, { dayId: workout[1], navigate });
   else if (history?.[2]) shown = await renderWorkout(container, { editSessionId: history[1], navigate });
@@ -41,6 +44,9 @@ async function show() {
   else if (hash === '#/gecmis') shown = await renderHistory(container, { flash: message });
   else if (progress) shown = await renderProgressDetail(container, { dayId: progress[1], exerciseId: progress[2], navigate });
   else if (hash === '#/ilerleme') shown = await renderProgressList(container);
+  else if (programPath?.[2]) shown = await renderItemEditor(container, { dayId: programPath[1], itemId: programPath[2], navigate });
+  else if (programPath?.[1]) shown = await renderDayEditor(container, { dayId: programPath[1], navigate, flash: message });
+  else if (programPath) shown = await renderProgram(container, { navigate, flash: message });
   else if (hash === '#/ayarlar') shown = await renderSettings(container);
   else shown = await renderHome(container, { flash: message });
   // Bu ekran yüklenirken adres yeniden değiştiyse geç kalan ekran yenisinin yerine geçmesin.

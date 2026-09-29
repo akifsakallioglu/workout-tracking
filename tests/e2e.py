@@ -1385,6 +1385,282 @@ def progress_steps(run):
     ]
 
 
+
+# ---------------------------------------------------------------- Program düzenleyici
+
+def program_rows(page):
+    return page.locator(".program-list .program-link")
+
+
+def open_program(page):
+    page.get_by_role("link", name="Programı düzenle").click()
+    expect(page.get_by_role("heading", level=1)).to_have_text("Program")
+
+
+def open_program_row(page, day_name, row_title):
+    open_program(page)
+    program_rows(page).filter(has_text=day_name).click()
+    expect(page.get_by_role("heading", level=1)).to_have_text(day_name)
+    program_rows(page).filter(has=page.get_by_text(row_title, exact=True)).click()
+    expect(page.get_by_role("heading", level=1)).to_have_text("Satırı düzenle")
+
+
+def item_message(page):
+    return page.locator("#item-message")
+
+
+def fill_target(page, sets, rep_min, rep_max):
+    page.get_by_label("Set", exact=True).fill(sets)
+    page.get_by_label("En az tekrar", exact=True).fill(rep_min)
+    page.get_by_label("En çok tekrar", exact=True).fill(rep_max)
+
+
+def save_item(page):
+    page.get_by_role("button", name="Kaydet", exact=True).click()
+
+
+def program_editor_steps(run):
+    def program_screen(page):
+        page.goto(run.base_url + "/")
+        open_program(page)
+        expect(page.locator(".program-list .program-link .day-name")).to_have_text(["Push", "Pull", "Legs", "Upper", "Lower"])
+        expect(program_rows(page).first.locator(".muted")).to_have_text("6 hareket")
+        expect(page.get_by_role("button", name="Push: yukarı taşı")).to_be_disabled()
+        expect(page.get_by_role("button", name="Lower: aşağı taşı")).to_be_disabled()
+        page.screenshot(path=str(ARTIFACTS / "asama10-program.png"), full_page=True)
+
+    def add_day_and_reorder(page):
+        page.get_by_role("button", name="+ Gün ekle").click()
+        expect(page.get_by_label("Yeni günün adı")).to_be_focused()
+        page.get_by_role("button", name="Ekle").click()
+        expect(page.locator(".program-form .message")).to_have_text("Güne bir ad verin.")
+        page.get_by_label("Yeni günün adı").fill("push")
+        page.get_by_role("button", name="Ekle").click()
+        expect(page.locator(".program-form .message")).to_have_text("Bu adda bir gün zaten var.")
+        page.get_by_label("Yeni günün adı").fill("Arms")
+        page.get_by_role("button", name="Ekle").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Arms")
+        expect(page.locator("#flash")).to_have_text("Gün eklendi ✓ Şimdi satır ekleyin.")
+        expect(page.locator(".empty-state")).to_have_text("Bu günde henüz satır yok.")
+        page.get_by_role("link", name="← Program").click()
+        expect(page.locator(".program-list .program-link .day-name")).to_have_text(["Push", "Pull", "Legs", "Upper", "Lower", "Arms"])
+        page.get_by_role("button", name="Arms: yukarı taşı").click()
+        expect(program_rows(page).nth(4)).to_contain_text("Arms")
+        expect(page.get_by_role("button", name="Arms: yukarı taşı")).to_be_focused()
+        expect(page.locator(".program-list .program-link .day-name")).to_have_text(["Push", "Pull", "Legs", "Upper", "Arms", "Lower"])
+        page.get_by_role("link", name="← Günler").click()
+        expect(page.locator(".days .day-name")).to_have_text(["Push", "Pull", "Legs", "Upper", "Arms", "Lower"])
+        expect(page.locator(".days .day").filter(has_text="Arms").locator(".muted")).to_have_text("0 hareket · henüz yapılmadı")
+
+    def add_rows(page):
+        open_program(page)
+        program_rows(page).filter(has_text="Arms").click()
+        page.get_by_role("link", name="+ Satır ekle").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Yeni satır")
+        save_item(page)
+        expect(item_message(page)).to_have_text("Bir hareket seçin.")
+        page.get_by_label("Hareket", exact=True).select_option(label="+ Yeni hareket")
+        expect(page.get_by_label("Yeni hareketin adı")).to_be_focused()
+        save_item(page)
+        expect(item_message(page)).to_have_text("Harekete bir ad verin.")
+        page.get_by_label("Yeni hareketin adı").fill("rope pushdown")
+        save_item(page)
+        expect(item_message(page)).to_have_text("Bu adda bir hareket zaten var.")
+        page.get_by_label("Yeni hareketin adı").fill("Cable Curl")
+        fill_target(page, "3", "10", "8")
+        save_item(page)
+        expect(item_message(page)).to_have_text("En çok tekrar, en az tekrardan küçük olamaz (en fazla 100).")
+        expect(page.get_by_label("En çok tekrar", exact=True)).to_have_attribute("aria-invalid", "true")
+        page.get_by_label("En çok tekrar", exact=True).fill("12")
+        page.screenshot(path=str(ARTIFACTS / "asama10-satir.png"), full_page=True)
+        save_item(page)
+        expect(page.locator("#flash")).to_have_text("Satır kaydedildi ✓")
+        expect(program_rows(page).first.locator(".day-name")).to_have_text("Cable Curl")
+        expect(program_rows(page).first.locator(".muted")).to_have_text("Hedef 3 × 10–12")
+
+        page.get_by_role("link", name="+ Satır ekle").click()
+        page.get_by_label("Hareket", exact=True).select_option(label="Wrist Curl")
+        page.get_by_label("İkinci hareket (isteğe bağlı)").select_option(label="Reverse Curl")
+        fill_target(page, "2", "15", "")
+        save_item(page)
+        expect(program_rows(page).nth(1).locator(".day-name")).to_have_text("Wrist Curl / Reverse Curl")
+        expect(program_rows(page).nth(1).locator(".muted")).to_have_text("Hedef 2 × 15")
+
+        page.get_by_role("link", name="+ Satır ekle").click()
+        page.get_by_label("Hareket", exact=True).select_option(label="Cable Curl")
+        fill_target(page, "3", "10", "")
+        save_item(page)
+        expect(item_message(page)).to_have_text("Cable Curl bu günde zaten var.")
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.get_by_role("link", name="← Arms").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Yeni satır")
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("link", name="← Arms").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Arms")
+
+        page.get_by_role("button", name="Wrist Curl / Reverse Curl: yukarı taşı").click()
+        expect(program_rows(page).first.locator(".day-name")).to_have_text("Wrist Curl / Reverse Curl")
+        page.screenshot(path=str(ARTIFACTS / "asama10-gun.png"), full_page=True)
+
+    def workout_uses_new_rows(page):
+        page.get_by_role("link", name="← Program").click()
+        page.get_by_role("link", name="← Günler").click()
+        page.locator(".days .day").filter(has_text="Arms").click()
+        expect(page.locator(".topbar h1")).to_have_text("Arms")
+        expect(page.locator("[data-card] h2")).to_have_text(["Wrist Curl / Reverse Curl", "Cable Curl"])
+        expect(card(page, "Cable Curl").locator(".target")).to_have_text("Hedef 3 × 10–12")
+        expect(card(page, "Cable Curl").locator(".no-machine")).to_have_count(1)
+        go_home(page)
+
+    def target_change(page):
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        log_sets(rope, "40", ["12", "12", "12"])
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        open_program_row(page, "Push", "Rope Pushdown")
+        expect(page.get_by_label("Hareket", exact=True)).to_have_value("rope-pushdown")
+        expect(page.get_by_label("Set", exact=True)).to_have_value("3")
+        fill_target(page, "4", "10", "12")
+        save_item(page)
+        expect(program_rows(page).filter(has_text="Rope Pushdown").locator(".muted")).to_have_text("Hedef 4 × 10–12")
+        page.get_by_role("link", name="← Program").click()
+        page.get_by_role("link", name="← Günler").click()
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        expect(rope.locator(".target")).to_have_text("Hedef 4 × 10–12")
+        expect(reps_inputs(rope)).to_have_count(4)
+        expect(last_time(rope)).to_contain_text("40 kg × 12 · 12 · 12")
+        go_home(page)
+        page.get_by_role("link", name="Geçmiş").click()
+        history_rows(page).first.click()
+        expect(page.locator(".entry .muted")).to_have_text("Hedef 3 × 12–15")
+        page.get_by_role("link", name="← Geçmiş").click()
+        page.get_by_role("link", name="← Günler").click()
+
+    def rename_keeps_history(page):
+        open_program_row(page, "Push", "Rope Pushdown")
+        page.get_by_role("button", name="Adı düzelt").click()
+        rename = page.get_by_label("Yeni ad (her günde değişir; geçmiş kayıtlar eski adla kalır)")
+        expect(rename).to_be_focused()
+        expect(rename).to_have_value("Rope Pushdown")
+        rename.fill("cable fly")
+        page.get_by_role("button", name="Adı kaydet").click()
+        expect(page.locator(".rename-form .message")).to_have_text("Bu adda bir hareket zaten var.")
+        page.get_by_label("Yeni ad (her günde değişir; geçmiş kayıtlar eski adla kalır)").fill("Triceps Rope Pushdown")
+        page.get_by_label("Yeni ad (her günde değişir; geçmiş kayıtlar eski adla kalır)").press("Enter")
+        expect(page.locator("#item-notice")).to_have_text("Hareketin adı değiştirildi ✓")
+        expect(page.get_by_label("Hareket", exact=True).locator("option:checked")).to_have_text("Triceps Rope Pushdown")
+        page.get_by_role("link", name="Vazgeç").click()  # satırda değişiklik yok: onay sorulmaz
+        expect(program_rows(page).filter(has_text="Triceps Rope Pushdown")).to_have_count(1)
+        page.get_by_role("link", name="← Program").click()
+        page.get_by_role("link", name="← Günler").click()
+        open_day(page, "push", "Push")
+        rope = card(page, "Triceps Rope Pushdown")
+        expect(radio(rope, "Kablo · kg")).to_be_checked()
+        expect(last_time(rope)).to_contain_text("40 kg × 12 · 12 · 12")
+        go_home(page)
+        page.get_by_role("link", name="Geçmiş").click()
+        history_rows(page).first.click()
+        expect(page.locator(".entry h2")).to_have_text("Rope Pushdown · Kablo")  # kayıt, antrenmandaki adı taşır
+        page.get_by_role("link", name="← Geçmiş").click()
+        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="İlerleme").click()
+        expect(page.locator(".days .day-name")).to_have_text(["Triceps Rope Pushdown"])
+        page.get_by_role("link", name="← Günler").click()
+
+    def delete_row_and_day(page):
+        open_program_row(page, "Arms", "Cable Curl")
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.get_by_role("button", name="Satırı sil").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Satırı düzenle")
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Satırı sil").click()
+        expect(page.locator("#flash")).to_have_text("Satır silindi.")
+        expect(program_rows(page)).to_have_count(1)
+
+        page.get_by_role("link", name="← Program").click()
+        page.get_by_role("link", name="← Günler").click()
+        page.locator(".days .day").filter(has_text="Arms").click()
+        wrist = card(page, "Wrist Curl / Reverse Curl")
+        add_machine(wrist, "Dambıl", "kg")
+        log_sets(wrist, "10", ["15"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        go_home(page)
+        open_program(page)
+        page.get_by_role("button", name="Programı sıfırla").click()
+        expect(page.locator("#program-message")).to_have_text(
+            "Devam eden antrenman varken program sıfırlanamaz. Önce antrenmanı bitirin ya da silin.")
+        program_rows(page).filter(has_text="Arms").click()
+        expect(page.locator(".reminder")).to_contain_text("Bu günün devam eden antrenmanı var")
+        page.get_by_role("button", name="Günü sil").click()
+        expect(page.locator("#day-message")).to_have_text("Bu günün devam eden antrenmanı var. Önce antrenmanı bitirin ya da silin.")
+        page.get_by_role("link", name="← Program").click()
+        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Devam et").click()
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Arms antrenmanı kaydedildi ✓")
+
+        open_program(page)
+        program_rows(page).filter(has_text="Arms").click()
+        messages = []
+        page.once("dialog", lambda dialog: (messages.append(dialog.message), dialog.dismiss()))
+        page.get_by_role("button", name="Günü sil").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Arms")
+        assert messages == ['"Arms" günü silinsin mi? Bu günün geçmiş kayıtları silinmez.'], messages
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Günü sil").click()
+        expect(page.locator("#flash")).to_have_text('"Arms" günü silindi.')
+        expect(page.locator(".program-list .program-link .day-name")).to_have_text(["Push", "Pull", "Legs", "Upper", "Lower"])
+        assert len(sessions(page)) == 2, "Silinen günün kaydı durmalı"
+        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="İlerleme").click()
+        other = page.locator(".days .day").filter(has_text="Wrist Curl")
+        expect(other.locator(".muted")).to_contain_text("Arms · 1 antrenman")
+        page.get_by_role("link", name="← Günler").click()
+
+    def reset_program(page):
+        open_program(page)
+        page.get_by_role("button", name="Pull: yukarı taşı").click()
+        expect(program_rows(page).first).to_contain_text("Pull")
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.get_by_role("button", name="Programı sıfırla").click()
+        expect(program_rows(page).first).to_contain_text("Pull")
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Programı sıfırla").click()
+        expect(page.locator("#flash")).to_have_text("Program sıfırlandı ✓")
+        expect(page.locator(".program-list .program-link .day-name")).to_have_text(["Push", "Pull", "Legs", "Upper", "Lower"])
+        saved = stored_program(page)
+        assert "customized" not in saved, saved.keys()
+        rope = saved["exercises"]["rope-pushdown"]
+        assert rope["name"] == "Rope Pushdown", rope
+        assert [equipment["name"] for equipment in rope["equipment"]] == ["Kablo"], rope
+        assert saved["exercises"]["wrist-curl"]["equipment"][0]["name"] == "Dambıl"
+        assert any(exercise["name"] == "Cable Curl" for exercise in saved["exercises"].values())
+        page.get_by_role("link", name="← Günler").click()
+        open_day(page, "push", "Push")
+        rope_card = card(page, "Rope Pushdown")
+        expect(rope_card.locator(".target")).to_have_text("Hedef 3 × 12–15")
+        expect(last_time(rope_card)).to_contain_text("40 kg × 12 · 12 · 12")
+        go_home(page)
+        page.emulate_media(color_scheme="dark")
+        open_program(page)
+        page.screenshot(path=str(ARTIFACTS / "asama10-program-koyu.png"), full_page=True)
+        page.emulate_media(color_scheme="light")
+
+    return [
+        ("Program ekranı: günler sırasıyla; baştaki ve sondaki taşıma düğmesi kapalı", program_screen),
+        ("Gün ekleniyor (boş ve aynı ad reddediliyor) ve sırası değişiyor; ana ekran yeni sırada", add_day_and_reorder),
+        ("Satır ekleniyor: yeni hareket, dönüşümlü satır, hedef denetimi; aynı hareket reddediliyor", add_rows),
+        ("Antrenman ekranı yeni günün satırlarını programdaki sırayla gösteriyor", workout_uses_new_rows),
+        ("Hedef değişince yeni antrenman yeni hedefle; eski kayıt eski hedefi gösteriyor", target_change),
+        ("Hareketin adı düzeltiliyor; geçmiş kopmuyor, eski kayıt eski adı taşıyor", rename_keeps_history),
+        ("Satır ve gün onayla siliniyor; devam eden antrenmanın günü silinemiyor; kayıtlar duruyor", delete_row_and_day),
+        ("Programı sıfırla: günler ve adlar geri geliyor; makineler ve kayıtlar duruyor", reset_program),
+    ]
+
+
 # ---------------------------------------------------------------- İnternetsiz çalışma ve güncelleme
 
 WAIT_FOR_CONTROLLER = "navigator.serviceWorker.controller !== null"
@@ -1747,6 +2023,7 @@ def main():
             run.flow("Dönüşümlü hareket önerisi", rotation_steps(run))
             run.flow("Geçmiş ve düzeltme", history_steps(run))
             run.flow("İlerleme grafikleri", progress_steps(run))
+            run.flow("Program düzenleyici", program_editor_steps(run))
             run.flow("İnternetsiz çalışma", offline_steps(run))
             run.flow("Yeni sürüm ve güncelleme", update_steps(copy_url, app_copy), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))

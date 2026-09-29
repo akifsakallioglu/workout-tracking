@@ -10,11 +10,13 @@ import {
   METRICS,
   collectSets,
   counterText,
+  dayNameError,
   defaultEquipmentId,
   equipmentError,
   equipmentUseCount,
   e1rm,
   evaluateCards,
+  exerciseNameError,
   exerciseSeries,
   formatDateTime,
   formatDay,
@@ -25,26 +27,38 @@ import {
   formatSets,
   formatTarget,
   hasProgress,
+  itemOptionsError,
   itemTitle,
   lastDoneDate,
   lastPerformance,
   liveProgressText,
   machinesWithRecords,
   metricValue,
+  movedDay,
+  movedItem,
   nextDayId,
   parseBackup,
+  parseTarget,
   parseReps,
   parseWeight,
   progressCounter,
   progressIndex,
+  renamedDay,
+  renamedExercise,
+  resetProgram,
   sessionSummary,
   suggestOption,
   suggestionText,
   upgradeProgram,
   usedEquipmentIds,
   validationMessage,
+  withDay,
   withEquipment,
+  withExercise,
+  withItem,
+  withoutDay,
   withoutEquipment,
+  withoutItem,
 } from '../js/logic.js';
 import { program as seed } from '../js/seed.js';
 
@@ -799,4 +813,107 @@ test('grafik: her antrenman bir nokta; son nokta seçili; ok tuşları ve dokunm
   } finally {
     svg.remove();
   }
+});
+
+// ---------------------------------------------------------------- Program düzenleyici
+
+const program = () => structuredClone(seed);
+
+test('gün ekleme, adlandırma, sıralama ve silme; program "düzenlendi" olarak işaretlenir', () => {
+  const start = program();
+  assertEqual(dayNameError(start, '  '), 'Güne bir ad verin.');
+  assertEqual(dayNameError(start, 'push'), 'Bu adda bir gün zaten var.');
+  assertEqual(dayNameError(start, 'Push', 'push'), '', 'kendi adı serbest');
+  assertEqual(dayNameError(start, 'x'.repeat(31)), 'Gün adı en fazla 30 karakter olabilir.');
+  const added = withDay(start, 'day-1', ' Arms ');
+  assertEqual(added.days.map((day) => day.name), ['Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Arms']);
+  assertEqual(added.days.at(-1), { id: 'day-1', name: 'Arms', items: [] });
+  assertEqual(added.customized, true);
+  assert(!start.customized && start.days.length === 5, 'eski program değişmez');
+  const up = movedDay(added, 'day-1', -1);
+  assertEqual(up.days.map((day) => day.id), ['push', 'pull', 'legs', 'upper', 'day-1', 'lower']);
+  assertEqual(movedDay(up, 'push', -1).days.map((day) => day.id), up.days.map((day) => day.id), 'baştaki gün yukarı gitmez');
+  assertEqual(renamedDay(up, 'day-1', 'Kol').days[4].name, 'Kol');
+  assertEqual(withoutDay(up, 'legs').days.map((day) => day.id), ['push', 'pull', 'upper', 'day-1', 'lower']);
+});
+
+test('sıradaki gün programdaki yeni sıraya göre; silinen günden sonra ilk gün', () => {
+  const custom = movedDay(withDay(program(), 'day-1', 'Arms'), 'day-1', -1);
+  const done = (dayId) => [session({ id: 's', date: '2026-09-20T12:00:00.000Z', dayId })];
+  assertEqual(nextDayId(custom, done('upper')), 'day-1');
+  assertEqual(nextDayId(custom, done('day-1')), 'lower');
+  assertEqual(nextDayId(withoutDay(custom, 'upper'), done('upper')), 'push');
+});
+
+test('hedef kutuları: set 1–10, tekrar 1–100; en çok tekrar boşsa en azla aynı', () => {
+  assertEqual(parseTarget({ sets: '3', repMin: '10', repMax: '12' }), { target: { sets: 3, repMin: 10, repMax: 12 } });
+  assertEqual(parseTarget({ sets: '4', repMin: '15', repMax: '' }), { target: { sets: 4, repMin: 15, repMax: 15 } });
+  assertEqual(parseTarget({ sets: '0', repMin: '10', repMax: '' }).field, 'sets');
+  assertEqual(parseTarget({ sets: '11', repMin: '10', repMax: '' }).field, 'sets');
+  assertEqual(parseTarget({ sets: '3', repMin: '', repMax: '12' }).field, 'repMin');
+  assertEqual(parseTarget({ sets: '3', repMin: '2,5', repMax: '' }).field, 'repMin');
+  assertEqual(parseTarget({ sets: '3', repMin: '12', repMax: '10' }).field, 'repMax');
+  assertEqual(parseTarget({ sets: '3', repMin: '12', repMax: '101' }).field, 'repMax');
+});
+
+test('satır ekleme, düzenleme, sıralama, silme; bir hareket bir günde tek satırda', () => {
+  const start = program();
+  assertEqual(itemOptionsError(start, 'push', null, ['rope-pushdown']), 'Rope Pushdown bu günde zaten var.');
+  assertEqual(itemOptionsError(start, 'push', 'push-rope-pushdown', ['rope-pushdown']), '', 'kendi satırı sayılmaz');
+  assertEqual(itemOptionsError(start, 'push', null, ['leg-press', 'leg-press']), 'İki hareket aynı olamaz.');
+  assertEqual(itemOptionsError(start, 'push', null, ['leg-press', 'cable-fly']), 'Cable Fly bu günde zaten var.');
+  assertEqual(itemOptionsError(start, 'legs', null, ['rope-pushdown']), '', 'başka günde olması engel değil');
+
+  const item = { id: 'item-1', options: ['leg-press', 'hip-thrust'], sets: 2, repMin: 8, repMax: 10 };
+  const added = withItem(start, 'push', item);
+  const push = (value) => value.days[0].items;
+  assertEqual(push(added).at(-1), item);
+  assertEqual(itemTitle(item, added.exercises), 'Leg Press / Hip Thrust');
+  const changed = withItem(added, 'push', { ...item, sets: 4 });
+  assertEqual(push(changed).length, 7, 'aynı kimlikli satır yerinde değişir');
+  assertEqual(push(changed).at(-1).sets, 4);
+  const up = movedItem(changed, 'push', 'item-1', -1);
+  assertEqual(push(up).map((row) => row.id).slice(-2), ['item-1', 'push-overhead-rope-extension']);
+  assertEqual(push(withoutItem(up, 'push', 'item-1')).length, 6);
+  assertEqual(up.days[1], start.days[1], 'diğer günler aynı kalır');
+});
+
+test('yeni hareket ve "Adı düzelt": ad bir kez, her yerde; aynı ad reddedilir', () => {
+  const start = program();
+  assertEqual(exerciseNameError(start, ''), 'Harekete bir ad verin.');
+  assertEqual(exerciseNameError(start, 'rope pushdown'), 'Bu adda bir hareket zaten var.');
+  assertEqual(exerciseNameError(start, 'Rope Pushdown', 'rope-pushdown'), '');
+  const added = withExercise(start, 'ex-1', ' Cable Curl ');
+  assertEqual(added.exercises['ex-1'], { name: 'Cable Curl', equipment: [] });
+  const renamed = renamedExercise(added, 'overhead-rope-extension', 'Overhead Extension');
+  const title = (dayId) => itemTitle(renamed.days.find((day) => day.id === dayId).items.at(-1), renamed.exercises);
+  assertEqual([title('push'), title('upper')], ['Overhead Extension', 'Overhead Extension']);
+});
+
+test('programı sıfırla: günler ve adlar başlangıca döner; makineler ve eklenen hareketler kalır', () => {
+  const machine = { id: 'eq-1', name: 'Kablo', unit: 'kg' };
+  let custom = withEquipment(program(), 'rope-pushdown', machine);
+  custom = renamedExercise(custom, 'rope-pushdown', 'Triceps Rope');
+  custom = withExercise(custom, 'ex-1', 'Cable Curl');
+  custom = withoutDay(withDay(custom, 'day-1', 'Arms'), 'push');
+  const reset = resetProgram(custom, seed);
+  assertEqual(reset.days, seed.days);
+  assertEqual(reset.exercises['rope-pushdown'], { name: 'Rope Pushdown', equipment: [machine] });
+  assertEqual(reset.exercises['ex-1'].name, 'Cable Curl');
+  assertEqual(reset.customized, undefined);
+});
+
+test('düzenlenmiş program başlangıç programı yükseltmesinde günlerini korur', () => {
+  const custom = { ...withDay(program(), 'day-1', 'Arms'), seedVersion: 3 };
+  const newer = { ...program(), seedVersion: 4 };
+  newer.days = newer.days.slice(0, 2);
+  const upgraded = upgradeProgram(custom, newer);
+  assertEqual(upgraded.seedVersion, 4);
+  assertEqual(upgraded.days.map((day) => day.id), ['push', 'pull', 'legs', 'upper', 'lower', 'day-1']);
+  assertEqual(upgradeProgram({ ...program(), seedVersion: 3 }, newer).days.map((day) => day.id), ['push', 'pull']);
+});
+
+test('günü olmayan program yedekten reddedilir', () => {
+  const backup = buildBackup({ ...program(), days: [] }, [], '2026-09-29T12:00:00.000Z');
+  assertEqual(parseBackup(JSON.stringify(backup)).error, 'Yedek dosyası bozuk: programda gün yok.');
 });
