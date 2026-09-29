@@ -32,6 +32,12 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - "Bitir" ve "Güncelle" bekleyen yazmaları bekler; hata varsa işlemi yapmaz.
 - Kayıpsızlık garantisi verilmez; arayüzde de verilmez.
 
+## İnternetsiz çalışma (PWA)
+- `sw.js` uygulama dosyalarını sürümlü önbellekte saklar (önce önbellek). **Her yayında `VERSION` artırılır**; yeni dosya eklenince `FILES` listesine yazılır (uçtan uca test eksik ya da fazla dosyayı yakalar).
+- Bilgisayarda (localhost/127.0.0.1) service worker kapalıdır, yalnızca adreste `?sw=1` varsa çalışır.
+- Yeni sürüm hazır olunca "Yeni sürüm var: Güncelle" bandı çıkar; "Güncelle" bekleyen yazmaları bitirir, yazma başarısızsa güncellemez.
+- Yayın: GitHub Pages (`main` dalı, kök klasör). Push yalnızca kullanıcının onayıyla. Simgeler `tools/render_icons.py` ile SVG'den üretilir.
+
 ## Yedek
 - Biçim: `{ app: "antrenman-takibi", backupVersion: 1, exportedAt, program, sessions }`; devam eden antrenman dahil. Cihaza özel ayarlar (`meta/settings`: `lastBackupAt`) yedeğe girmez.
 - Geri yüklemede dosya `parseBackup` ile denetlenir; özet gösterilir, onaydan sonra program ve antrenmanlar tek işlemde değiştirilir (`replaceAll`). İşlem yarıda hata verirse iptal edilir, hiçbir şey değişmez.
@@ -49,4 +55,4 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Yeni kararlar bu dosyaya işlenir.
 
 ## Aşamalar
-0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
+0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma (kod ✓, GitHub Pages yayını kullanıcı onayı bekliyor) · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi

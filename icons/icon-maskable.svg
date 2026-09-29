@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Tam kaplamalı sürüm: Android ve iPhone köşeleri kendisi keser; çizim ortadaki güvenli alanda. -->
+  <rect width="512" height="512" fill="#0969da"/>
+  <g fill="#ffffff" transform="translate(256 256) scale(0.9) translate(-256 -256)">
+    <rect x="150" y="240" width="212" height="32" rx="8"/>
+    <rect x="118" y="160" width="48" height="192" rx="14"/>
+    <rect x="346" y="160" width="48" height="192" rx="14"/>
+    <rect x="80" y="196" width="34" height="120" rx="12"/>
+    <rect x="398" y="196" width="34" height="120" rx="12"/>
+  </g>
+</svg>

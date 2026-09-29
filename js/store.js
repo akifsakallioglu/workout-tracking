@@ -53,6 +53,12 @@ export function hasPendingWrites() {
   return pending > 0;
 }
 
+// Sıradaki bütün yazmaların bitmesini bekler; son yazma başarılıysa true.
+export async function waitForWrites() {
+  await queue;
+  return status.state !== 'error';
+}
+
 // Ayarlar (bu cihaza özel, yedeğe girmez): { lastBackupAt }
 export async function loadSettings() {
   await queue;

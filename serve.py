@@ -58,9 +58,9 @@ class Server(http.server.ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
-def make_server(host="127.0.0.1", port=8000, quiet=False):
+def make_server(host="127.0.0.1", port=8000, quiet=False, directory=ROOT):
     handler_class = QuietHandler if quiet else Handler
-    handler = functools.partial(handler_class, directory=str(ROOT))
+    handler = functools.partial(handler_class, directory=str(directory))
     return Server((host, port), handler)
 
 

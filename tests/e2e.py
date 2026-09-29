@@ -11,7 +11,9 @@ klasörüne kaydedilir; bu klasör git'e eklenmez.
 """
 import json
 import re
+import shutil
 import sys
+import tempfile
 import threading
 import urllib.error
 import urllib.request
@@ -247,9 +249,21 @@ def infrastructure_steps(run):
         else:
             raise AssertionError("Gizli dosya sunuldu: /.gitignore")
 
+    def service_worker_lists_all_files(page):
+        text = urllib.request.urlopen(run.base_url + "/sw.js").read().decode("utf-8")
+        listed = set(re.findall(r"^\s+'([^']+)',$", text, re.MULTILINE))
+        app_files = [*ROOT.glob("css/*.css"), *ROOT.glob("js/**/*.js"), *ROOT.glob("icons/*")]
+        expected = {"./", "index.html", "manifest.webmanifest"} | {path.relative_to(ROOT).as_posix() for path in app_files}
+        expected -= {"icons/icon-maskable.svg"}  # yalnızca PNG üretmek için kaynak
+        assert listed == expected, f"sw.js listesi eksik ya da fazla: eksik {expected - listed}, fazla {listed - expected}"
+        for file in listed - {"./"}:
+            assert urllib.request.urlopen(f"{run.base_url}/{file}").status == 200, file
+        return f"{len(listed)} dosya"
+
     return [
         ("Birim testlerinin hepsi geçiyor", unit_tests_pass),
         ("Sunucu gizli dosyaları vermiyor", hidden_files_not_served),
+        ("Service worker uygulamanın bütün dosyalarını saklıyor", service_worker_lists_all_files),
     ]
 
 
@@ -831,6 +845,121 @@ def backup_steps(run):
     ]
 
 
+# ---------------------------------------------------------------- İnternetsiz çalışma ve güncelleme
+
+WAIT_FOR_CONTROLLER = "navigator.serviceWorker.controller !== null"
+
+
+def offline_steps(run):
+    def installs_and_opens_offline(page):
+        page.goto(run.base_url + "/?sw=1")
+        page.wait_for_function(WAIT_FOR_CONTROLLER)
+        manifest = page.evaluate("fetch('manifest.webmanifest').then((response) => response.json())")
+        assert (manifest["name"], manifest["display"], manifest["start_url"]) == ("Antrenman Takibi", "standalone", "./"), manifest
+        page.context.set_offline(True)
+        page.reload()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+        expect(page.locator(".day-name")).to_have_count(5)
+
+    def logs_offline(page):
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        expect(save_status(page)).to_have_text("Makine eklendi ✓")
+        log_sets(rope, "50", ["12", "11"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+
+    def reopens_offline_with_values(page):
+        page.goto(run.base_url + "/?sw=1")  # internet yokken uygulama kapatılıp açılmış gibi
+        expect(page.locator("#resume-title")).to_have_text("Push")
+        page.get_by_role("link", name="Devam et").click()
+        rope = card(page, "Rope Pushdown")
+        expect(weight_input(rope)).to_have_value("50")
+        expect(reps(rope, 2)).to_have_value("11")
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        expect(page.locator("#update-banner")).to_be_hidden()
+        page.context.set_offline(False)
+
+    return [
+        ("?sw=1 ile uygulama kuruluyor ve internetsiz açılıyor", installs_and_opens_offline),
+        ("İnternet yokken makine ekleniyor ve setler kaydediliyor", logs_offline),
+        ("İnternet yokken kapatılıp açılınca değerler duruyor; antrenman bitiriliyor", reopens_offline_with_values),
+    ]
+
+
+def update_steps(base_url, app_copy):
+    def bump_version(version):
+        sw = app_copy / "sw.js"
+        text = sw.read_text(encoding="utf-8")
+        sw.write_text(re.sub(r"const VERSION = '[^']*';", f"const VERSION = '{version}';", text), encoding="utf-8")
+
+    def check_for_update(page):
+        page.evaluate("navigator.serviceWorker.getRegistration().then((registration) => registration.update())")
+
+    def cache_names(page):
+        return page.evaluate("caches.keys()")
+
+    def new_version_offered(page):
+        page.goto(base_url + "/?sw=1")
+        page.wait_for_function(WAIT_FOR_CONTROLLER)
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        log_sets(rope, "50", [])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        expect(page.locator("#update-banner")).to_be_hidden()
+        bump_version("test-2")
+        check_for_update(page)
+        expect(page.locator("#update-banner")).to_be_visible()
+        expect(page.locator("#update-text")).to_have_text("Yeni sürüm var.")
+        page.screenshot(path=str(ARTIFACTS / "asama5-yeni-surum.png"))
+
+    def update_waits_for_pending_write(page):
+        reps(card(page, "Rope Pushdown"), 1).fill("12")  # 0,5 sn dolmadan "Güncelle"
+        with page.expect_navigation():
+            page.get_by_role("button", name="Güncelle").click()
+        expect(page.locator(".topbar h1")).to_have_text("Push")
+        expect(reps(card(page, "Rope Pushdown"), 1)).to_have_value("12")
+        expect(page.locator("#update-banner")).to_be_hidden()
+        names = cache_names(page)
+        assert "antrenman-test-2" in names and "antrenman-1" not in names, names
+
+    def update_refused_on_write_error(page):
+        rope = card(page, "Rope Pushdown")
+        page.evaluate("window.__failWrites = true")
+        reps(rope, 2).fill("11")
+        expect(save_status(page)).to_contain_text("Kaydedilemedi.")
+        bump_version("test-3")
+        check_for_update(page)
+        expect(page.locator("#update-banner")).to_be_visible()
+        page.get_by_role("button", name="Güncelle").click()
+        expect(page.locator("#update-text")).to_have_text("Son değişiklikler kaydedilemediği için güncellenmedi. Önce kaydı tamamlayın.")
+        assert "antrenman-test-3" not in cache_names(page) or page.evaluate(
+            "navigator.serviceWorker.getRegistration().then((registration) => registration.waiting !== null)"
+        ), "Yeni sürüm devreye girmemeliydi"
+        page.evaluate("window.__failWrites = false")
+        page.get_by_role("button", name="Tekrar dene").click()
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        with page.expect_navigation():
+            page.get_by_role("button", name="Güncelle").click()
+        expect(reps(card(page, "Rope Pushdown"), 2)).to_have_value("11")
+        assert "antrenman-test-3" in cache_names(page)
+
+    return [
+        ("Yeni sürüm yayınlanınca 'Yeni sürüm var: Güncelle' bandı çıkıyor", new_version_offered),
+        ("'Güncelle' bekleyen kaydı önce bitiriyor, sonra yeni sürüme geçiyor", update_waits_for_pending_write),
+        ("Kayıt hatası varken güncellenmiyor; kayıt tamamlanınca güncelleniyor", update_refused_on_write_error),
+    ]
+
+
+def copy_app(target):
+    for name in ("index.html", "manifest.webmanifest", "sw.js"):
+        shutil.copy2(ROOT / name, target / name)
+    for folder in ("css", "js", "icons"):
+        shutil.copytree(ROOT / folder, target / folder)
+
+
 # ---------------------------------------------------------------- Günler, makineler, dönüşümlü satır
 
 def day_separation_steps(run):
@@ -1059,6 +1188,12 @@ def main():
     server = make_server(port=0, quiet=True)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    # Güncelleme testi için uygulamanın geçici bir kopyası ayrı bir sunucuda: sw.js orada değiştirilir.
+    app_copy = Path(tempfile.mkdtemp(prefix="antrenman-kopya-"))
+    copy_app(app_copy)
+    copy_server = make_server(port=0, quiet=True, directory=app_copy)
+    threading.Thread(target=copy_server.serve_forever, daemon=True).start()
+    copy_url = f"http://127.0.0.1:{copy_server.server_address[1]}"
     try:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(channel="chrome")
@@ -1068,14 +1203,18 @@ def main():
             run.flow("Push antrenmanı", push_workout_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Otomatik kaydetme ve devam eden antrenman", autosave_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Yedekleme", backup_steps(run), init_script=FAIL_WRITES_SCRIPT)
+            run.flow("İnternetsiz çalışma", offline_steps(run))
+            run.flow("Yeni sürüm ve güncelleme", update_steps(copy_url, app_copy), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))
             run.flow("Hedef kopyası", target_copy_steps(run))
             run.flow("Aşama 1 verisinden yükseltme", upgrade_steps(run))
             run.flow("Aşama 2 verisinden yükseltme", phase2_upgrade_steps(run))
             browser.close()
     finally:
-        server.shutdown()
-        server.server_close()
+        for running in (server, copy_server):
+            running.shutdown()
+            running.server_close()
+        shutil.rmtree(app_copy, ignore_errors=True)
 
     total = run.passed + len(run.failed) + run.skipped
     print(f"\n{run.passed}/{total} adım geçti", end="")

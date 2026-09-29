@@ -1,5 +1,5 @@
 // Açılış ve yönlendirme: #/ ana ekran, #/antrenman/<gün> antrenman ekranı, #/ayarlar ayarlar.
-import { initStore } from './store.js';
+import { initStore, waitForWrites } from './store.js';
 import { renderHome } from './views/home.js';
 import { renderSettings } from './views/settings.js';
 import { renderWorkout } from './views/workout.js';
@@ -56,9 +56,57 @@ window.addEventListener('beforeunload', (event) => {
   }
 });
 
+// Service worker uygulama dosyalarını telefonda saklar (internetsiz açılış). Yayında hep açıktır;
+// bilgisayarda (localhost) yalnızca adreste ?sw=1 varsa: geliştirirken eski kod önbellekten gelmesin.
+async function setupServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+  if (local && !new URLSearchParams(location.search).has('sw')) {
+    for (const registration of await navigator.serviceWorker.getRegistrations()) await registration.unregister();
+    return;
+  }
+  const registration = await navigator.serviceWorker.register('sw.js');
+  const offer = (worker) => showUpdateBanner(worker);
+  if (registration.waiting && navigator.serviceWorker.controller) offer(registration.waiting);
+  registration.addEventListener('updatefound', () => {
+    const worker = registration.installing;
+    worker.addEventListener('statechange', () => {
+      // İlk kurulumda değil, eski bir sürüm çalışırken yeni sürüm hazır olunca sorulur.
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) offer(worker);
+    });
+  });
+}
+
+let updating = false;
+
+// "Güncelle": önce bekleyen kayıtlar yazılır; yazma başarısız olduysa güncellenmez.
+function showUpdateBanner(worker) {
+  const banner = document.getElementById('update-banner');
+  const text = document.getElementById('update-text');
+  const button = document.getElementById('update-button');
+  banner.hidden = false;
+  button.onclick = async () => {
+    button.disabled = true;
+    text.textContent = 'Kayıtlar tamamlanıyor…';
+    view?.flush?.();
+    if (!(await waitForWrites())) {
+      text.textContent = 'Son değişiklikler kaydedilemediği için güncellenmedi. Önce kaydı tamamlayın.';
+      button.disabled = false;
+      return;
+    }
+    updating = true;
+    worker.postMessage('skip-waiting');
+  };
+}
+
+navigator.serviceWorker?.addEventListener('controllerchange', () => {
+  if (updating) location.reload();
+});
+
 try {
   await initStore();
   await show();
+  setupServiceWorker().catch((error) => console.warn('Service worker kurulamadı', error));
 } catch (error) {
   console.error(error);
   const message = document.createElement('p');
