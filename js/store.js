@@ -1,5 +1,6 @@
 // Veri erişim katmanı: ekranlar veritabanına yalnızca buradan ulaşır.
 import { get, getAll, openDatabase, put } from './db.js';
+import { upgradeProgram } from './logic.js';
 import { program as seedProgram } from './seed.js';
 
 let db = null;
@@ -13,13 +14,17 @@ export async function initStore() {
 }
 
 // İlk açılışta başlangıç programı veritabanına yazılır; sonra hep veritabanındaki hâli kullanılır.
+// Kayıtlı program başlangıç programının eski bir sürümündense yükseltilip yeniden yazılır.
 export async function loadProgram() {
   const stored = await get(db, 'meta', 'program');
+  let program;
   if (stored) {
-    const { key, ...program } = stored;
-    return program;
+    const { key, ...saved } = stored;
+    program = upgradeProgram(saved, structuredClone(seedProgram));
+    if (program === saved) return saved;
+  } else {
+    program = structuredClone(seedProgram);
   }
-  const program = structuredClone(seedProgram);
   await enqueue(() => put(db, 'meta', { key: 'program', ...program }));
   return program;
 }

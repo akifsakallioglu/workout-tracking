@@ -27,8 +27,9 @@ export function parseReps(text) {
 }
 
 // Ağırlık hareket başına bir kez girilir ve tekrarı girilen her sete uygulanır; boş tekrar
-// kutuları atlanır. Önceki değerler (ipuçları) bu fonksiyona hiç gelmez, bu yüzden bugünkü
-// setleri dolduramaz. Sorun varsa set döndürülmez.
+// kutuları atlanır. Hiçbir kutusu dolu olmayan hareket "atlandı" sayılır: set de sorun da yoktur.
+// Önceki değerler (ipuçları) bu fonksiyona hiç gelmez, bu yüzden bugünkü setleri dolduramaz.
+// Sorun varsa set döndürülmez.
 export function collectSets({ weight: weightText, reps: repsTexts }, unit) {
   const problems = [];
   const weight = unit === 'none' ? null : parseWeight(weightText);
@@ -40,23 +41,34 @@ export function collectSets({ weight: weightText, reps: repsTexts }, unit) {
     if (Number.isNaN(value)) problems.push({ field: 'reps', row: index, kind: 'invalid' });
     else reps.push(value);
   });
-  if (unit !== 'none' && weight === null && reps.length > 0) problems.push({ field: 'weight', kind: 'missing' });
+  if (unit !== 'none') {
+    if (weight === null && reps.length > 0) problems.push({ field: 'weight', kind: 'missing' });
+    // Yalnızca ağırlık yazılmışsa sessizce atlanmasın; kullanıcı tekrarları unutmuş olabilir.
+    if (typeof weight === 'number' && !Number.isNaN(weight) && reps.length === 0 && !problems.length) {
+      problems.push({ field: 'reps', kind: 'missing' });
+    }
+  }
   const sets = problems.length ? [] : reps.map((count) => ({ weight, reps: count }));
   return { sets, problems };
 }
 
-// Kaydetmeyi engelleyen bir durum varsa kullanıcıya gösterilecek mesaj; yoksa boş metin.
-export function validationMessage(sets, problems, unit) {
+// Kaydetmeyi engelleyen bir sorun varsa kullanıcıya gösterilecek mesaj; yoksa boş metin.
+export function validationMessage(problems, unit) {
   const level = unit === 'level';
   if (problems.some((problem) => problem.field === 'weight' && problem.kind === 'invalid')) {
     return level ? 'Kademe geçersiz. 10 gibi bir sayı girin.' : 'Ağırlık geçersiz. 22,5 gibi bir sayı girin.';
   }
-  const invalidReps = problems.filter((problem) => problem.field === 'reps').map((problem) => problem.row + 1);
+  const invalidReps = problems
+    .filter((problem) => problem.field === 'reps' && problem.kind === 'invalid')
+    .map((problem) => problem.row + 1);
   if (invalidReps.length) return `Geçersiz tekrar: ${ordinalList(invalidReps)} set. 12 gibi bir tam sayı girin.`;
   if (problems.some((problem) => problem.field === 'weight' && problem.kind === 'missing')) {
     return level ? 'Kademeyi girin.' : 'Ağırlığı girin.';
   }
-  return sets.length ? '' : 'En az bir setin tekrar sayısını girin.';
+  if (problems.some((problem) => problem.field === 'reps' && problem.kind === 'missing')) {
+    return level ? 'Tekrarları girin ya da kademeyi silin.' : 'Tekrarları girin ya da ağırlığı silin.';
+  }
+  return '';
 }
 
 function ordinalList(numbers) {
@@ -81,28 +93,89 @@ export function lastPerformance(sessions, { dayId, exerciseId, equipmentId }, be
   return latest;
 }
 
-// Tek hareketlik, kaydedildiği anda bitmiş bir antrenman. Hareket adı, makine adı, birim ve hedef
-// kayda kopyalanır; program sonradan değişse de bu kayıt kendi hedefini taşır.
-export function buildSession({ id, now, day, item, exerciseId, exercise, equipment, sets }) {
+// O gün bu harekette en son kullanılan makine; yoksa (ya da o makine artık listede değilse)
+// listedeki ilk makine.
+export function defaultEquipmentId(sessions, dayId, exerciseId, exercise) {
+  const available = exercise.equipment.filter((equipment) => !equipment.archived);
+  let latest = null;
+  for (const session of sessions) {
+    if (!session.finishedAt || session.dayId !== dayId) continue;
+    const entry = session.entries.find((candidate) => candidate.exerciseId === exerciseId && candidate.sets.length > 0);
+    if (entry && (!latest || session.startedAt > latest.date)) {
+      latest = { date: session.startedAt, equipmentId: entry.equipmentId };
+    }
+  }
+  const used = latest && available.find((equipment) => equipment.id === latest.equipmentId);
+  return (used ?? available[0]).id;
+}
+
+// Son bitirilen antrenmandan sonraki gün, program sırasına göre (sonuncudan sonra başa döner).
+// Hiç antrenman yoksa ya da son günün programda karşılığı yoksa ilk gün.
+export function nextDayId(program, sessions) {
+  let latest = null;
+  for (const session of sessions) {
+    if (session.finishedAt && session.entries.length && (!latest || session.startedAt > latest.startedAt)) {
+      latest = session;
+    }
+  }
+  const index = latest ? program.days.findIndex((day) => day.id === latest.dayId) : -1;
+  return program.days[(index + 1) % program.days.length].id;
+}
+
+// Günün en son yapıldığı antrenmanın tarihi; hiç yapılmadıysa null.
+export function lastDoneDate(sessions, dayId) {
+  let latest = null;
+  for (const session of sessions) {
+    if (session.finishedAt && session.dayId === dayId && session.entries.length && (!latest || session.startedAt > latest)) {
+      latest = session.startedAt;
+    }
+  }
+  return latest;
+}
+
+// Dönüşümlü satırın başlığı: "Wrist Curl / Reverse Curl"
+export function itemTitle(item, exercises) {
+  return item.options.map((exerciseId) => exercises[exerciseId].name).join(' / ');
+}
+
+// Bir hareketin kaydı. Hareket adı, makine adı, birim ve hedef kayda kopyalanır; program sonradan
+// değişse de bu kayıt kendi hedefini taşır.
+export function buildEntry({ item, exerciseId, exercise, equipment, sets }) {
   return {
-    id,
-    dayId: day.id,
-    dayName: day.name,
-    startedAt: now,
-    finishedAt: now,
-    entries: [
-      {
-        exerciseId,
-        equipmentId: equipment.id,
-        name: exercise.name,
-        equipmentName: equipment.name,
-        unit: equipment.unit,
-        options: [...item.options],
-        target: { sets: item.sets, repMin: item.repMin, repMax: item.repMax },
-        sets,
-      },
-    ],
+    exerciseId,
+    equipmentId: equipment.id,
+    name: exercise.name,
+    equipmentName: equipment.name,
+    unit: equipment.unit,
+    options: [...item.options],
+    target: { sets: item.sets, repMin: item.repMin, repMax: item.repMax },
+    sets,
   };
+}
+
+export function buildSession({ id, startedAt, finishedAt, day, entries }) {
+  return { id, dayId: day.id, dayName: day.name, startedAt, finishedAt, entries };
+}
+
+// Kayıtlı program, başlangıç programının eski bir sürümündense yükseltilir: günler yeni
+// programdan gelir, eksik hareketler ve başlangıç makineleri eklenir; kullanıcının eklediği
+// makineler korunur. Sürüm güncelse program olduğu gibi döner.
+export function upgradeProgram(stored, seed) {
+  if ((stored.seedVersion ?? 1) >= seed.seedVersion) return stored;
+  const exercises = { ...stored.exercises };
+  for (const [id, exercise] of Object.entries(seed.exercises)) {
+    const existing = stored.exercises[id];
+    if (!existing) {
+      exercises[id] = exercise;
+      continue;
+    }
+    const known = new Set(existing.equipment.map((equipment) => equipment.id));
+    exercises[id] = {
+      ...existing,
+      equipment: [...existing.equipment, ...exercise.equipment.filter((equipment) => !known.has(equipment.id))],
+    };
+  }
+  return { ...stored, seedVersion: seed.seedVersion, exercises, days: seed.days };
 }
 
 // Yeni makinenin adı ve birimi için denetim; sorun yoksa boş metin. Birimi kullanıcı seçer:

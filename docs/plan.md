@@ -60,7 +60,7 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
 - **Hedef kopyalanır.** Antrenman başlarken hareket adı, makine adı, birim ve hedef kaydın içine kopyalanır. Program sonradan değişse de eski kayıt kendi hedefini gösterir.
 - **Set tanımı:**
   - Ağırlık hareket başına bir kez girilir ve tekrarı girilen her sete uygulanır: 35 kg girildiyse bütün setler 35 kg'dır. Kayıtta her set bu ağırlığı taşır. Ağırlıksız makinede yalnızca tekrar girilir.
-  - Tekrar girilip ağırlık girilmezse uyarı çıkar; boş tekrar kutusu kaydedilmez.
+  - Tekrar girilip ağırlık girilmezse uyarı çıkar; boş tekrar kutusu kaydedilmez. Yalnızca ağırlık girilip tekrar girilmezse de uyarı çıkar; yazılan değer sessizce kaybolmaz.
   - Önceki değerler yalnızca soluk ipucudur; siz yazmadıkça hiçbir kutu dolmaz.
 - **"Yapıldı" ve "atlandı":** bitmiş bir antrenmanda en az bir seti girilen hareket "yapıldı" sayılır. Hiç seti girilmeyen hareket "atlandı" sayılır ve kayda yazılmaz. Atlanan hareket "geçen sefer", sayaç ve dönüşüm sırasında hesaba katılmaz. Bitmemiş antrenmanlar da bu hesaplara katılmaz.
 - **Başlangıç makineleri:** her harekete adından tahmin edilen tek bir makine konur.
@@ -229,6 +229,8 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - Makine seçimi ve "+ Makine" (Aşama 1'de geldi) tüm hareketlerde çalışır. O gün en son kullanılan makine seçili gelir.
 - Dönüşümlü satırlarda iki hareketten biri şimdilik elle seçilir.
 - "+ Set" ve son seti silme eklenir.
+- Kayıtlı program başlangıç programının eski bir sürümündense (`SEED_VERSION`) açılışta yükseltilir; kullanıcının eklediği makineler ve kayıtlar korunur.
+- Otomatik kaydetme Aşama 3'te geldiği için, kaydedilmemiş değerler varken ekrandan çıkarken ya da sayfayı kapatırken onay sorulur.
 - *Bitti sayılır:*
   - Satır sayıları doğru: Push 6, Pull 8, Legs 8, Upper 6, Lower 6. Sıra ve hedefler programla aynı.
   - Overhead Rope Extension, Push'ta 2 × 15, Upper'da 3 × 12–15 hedefiyle açılıyor.
