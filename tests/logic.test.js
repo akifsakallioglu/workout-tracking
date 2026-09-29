@@ -8,6 +8,7 @@ import {
   buildEntry,
   buildSession,
   METRICS,
+  changedEquipment,
   collectSets,
   counterText,
   dayNameError,
@@ -43,9 +44,12 @@ import {
   parseWeight,
   progressCounter,
   progressIndex,
+  programTarget,
   renamedDay,
   renamedExercise,
   resetProgram,
+  restoreError,
+  restoredEquipment,
   sessionSummary,
   suggestOption,
   suggestionText,
@@ -916,4 +920,45 @@ test('düzenlenmiş program başlangıç programı yükseltmesinde günlerini ko
 test('günü olmayan program yedekten reddedilir', () => {
   const backup = buildBackup({ ...program(), days: [] }, [], '2026-09-29T12:00:00.000Z');
   assertEqual(parseBackup(JSON.stringify(backup)).error, 'Yedek dosyası bozuk: programda gün yok.');
+});
+
+// ---------------------------------------------------------------- Makine yönetimi ve "+ Hareket ekle"
+
+test('makinenin adı ve birimi değişiyor; kendi adı serbest, başka etkin makinenin adı değil', () => {
+  let custom = withEquipment(program(), 'rope-pushdown', { id: 'eq-1', name: 'Kablo', unit: 'kg' });
+  custom = withEquipment(custom, 'rope-pushdown', { id: 'eq-2', name: 'Kablo 2', unit: 'level' });
+  const exercise = custom.exercises['rope-pushdown'];
+  assertEqual(equipmentError(exercise, 'kablo', 'kg', 'eq-1'), '', 'kendi adı');
+  assertEqual(equipmentError(exercise, 'Kablo 2', 'kg', 'eq-1'), 'Bu adda bir makine zaten var.');
+  assertEqual(equipmentError(exercise, 'Kablo 2', 'kg'), 'Bu adda bir makine zaten var.', 'yeni makinede kendi yok');
+  const changed = changedEquipment(custom, 'rope-pushdown', 'eq-1', { name: ' Halat ', unit: 'level' });
+  assertEqual(changed.exercises['rope-pushdown'].equipment, [
+    { id: 'eq-1', name: 'Halat', unit: 'level' },
+    { id: 'eq-2', name: 'Kablo 2', unit: 'level' },
+  ]);
+  assertEqual(custom.exercises['rope-pushdown'].equipment[0].name, 'Kablo', 'eski program değişmez');
+  assertEqual(changed.customized, undefined, 'makine değişikliği günleri değiştirmez');
+});
+
+test('silinmiş makine geri alınıyor; aynı adda etkin makine varken alınmıyor', () => {
+  let custom = withEquipment(program(), 'rope-pushdown', { id: 'eq-1', name: 'Kablo', unit: 'kg' });
+  custom = withoutEquipment(custom, 'rope-pushdown', 'eq-1', new Set(['eq-1']));
+  assertEqual(custom.exercises['rope-pushdown'].equipment[0].archived, true);
+  assertEqual(restoreError(custom.exercises['rope-pushdown'], 'eq-1'), '');
+  assertEqual(restoredEquipment(custom, 'rope-pushdown', 'eq-1').exercises['rope-pushdown'].equipment, [
+    { id: 'eq-1', name: 'Kablo', unit: 'kg' },
+  ]);
+  const clash = withEquipment(custom, 'rope-pushdown', { id: 'eq-2', name: 'kablo', unit: 'level' });
+  assertEqual(
+    restoreError(clash.exercises['rope-pushdown'], 'eq-1'),
+    '"Kablo" adında etkin bir makine var. Geri almadan önce onun adını değiştirin.',
+  );
+});
+
+test('"+ Hareket ekle": hedef hareketin programdaki ilk satırından; katalog değişikliği programı "düzenlendi" yapmaz', () => {
+  assertEqual(programTarget(seed, 'overhead-rope-extension'), { sets: 2, repMin: 15, repMax: 15 }, 'ilk bulunduğu gün Push');
+  assertEqual(programTarget(seed, 'reverse-curl'), { sets: 2, repMin: 15, repMax: 15 }, 'dönüşümlü satırın ikinci hareketi');
+  assertEqual(programTarget(withExercise(program(), 'ex-1', 'Cable Curl'), 'ex-1'), null);
+  assertEqual(withExercise(program(), 'ex-1', 'Cable Curl').customized, undefined);
+  assertEqual(renamedExercise(program(), 'rope-pushdown', 'Triceps Rope').customized, undefined);
 });

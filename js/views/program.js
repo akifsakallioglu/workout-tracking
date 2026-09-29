@@ -2,6 +2,7 @@
 // düzenleme, sıralama, silme) ve "Programı sıfırla". Her değişiklik hemen kaydedilir; satır
 // düzenleme ekranı "Kaydet" ile kaydeder. Devam eden antrenman kendi kopyasıyla sürer.
 import {
+  UNIT_LABELS,
   activeSession,
   dayNameError,
   exerciseNameError,
@@ -283,7 +284,8 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
       <form class="card program-form" data-form="item" novalidate>
         ${exerciseFieldHtml('first', 'Hareket', form.first, form.firstName)}
         ${exerciseFieldHtml('second', 'İkinci hareket (isteğe bağlı)', form.second, form.secondName)}
-        <p class="muted field-hint">İkinci hareket seçilirse satır dönüşümlü olur: iki hareket antrenmandan antrenmana sırayla yapılır.</p>
+        <p class="muted field-hint">İkinci hareket seçilirse satır dönüşümlü olur: iki hareket antrenmandan antrenmana sırayla yapılır.
+          Makineler antrenman ekranında, hareketin kartından eklenir ve "Düzenle" ile değiştirilir.</p>
         <fieldset class="target-fieldset">
           <legend>Hedef</legend>
           <div class="target-fields">
@@ -323,6 +325,7 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
           <label class="sub-label" for="${field}-name">Yeni hareketin adı</label>
           <input id="${field}-name" name="${field}Name" type="text" maxlength="60" autocomplete="off"
             value="${escapeHtml(newName)}"${state.field === `${field}Name` ? ' aria-invalid="true"' : ''}>` : ''}
+        ${value && value !== NEW ? `<p class="muted machine-summary">${machineSummary(state.program.exercises[value])}</p>` : ''}
         ${value && value !== NEW && !rename ? `
           <button type="button" class="link-button" data-action="open-rename" data-field="${field}">Adı düzelt</button>` : ''}
         ${rename ? `
@@ -485,6 +488,14 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
     beforeLeave: () => !unsaved() || confirm('Satırdaki değişiklikler kaydedilmedi. Çıkılsın mı?'),
     hasUnsavedChanges: unsaved,
   };
+}
+
+// Satır formunda seçili hareketin (silinmemiş) makineleri.
+function machineSummary(exercise) {
+  const active = exercise.equipment.filter((option) => !option.archived);
+  return active.length
+    ? `Makineler: ${active.map((option) => escapeHtml(`${option.name} · ${UNIT_LABELS[option.unit]}`)).join(', ')}`
+    : 'Henüz makine yok';
 }
 
 // Sıralama düğmeleri: yukarı ve aşağı (başta ve sonda kapalı).

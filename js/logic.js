@@ -238,12 +238,13 @@ export function upgradeProgram(stored, seed, used = new Set()) {
 
 // Yeni makinenin adı ve birimi için denetim; sorun yoksa boş metin. Birimi kullanıcı seçer:
 // aynı salondaki iki kablo makinesinin ikisi de kg olabilir.
-export function equipmentError(exercise, name, unit) {
+export function equipmentError(exercise, name, unit, equipmentId = null) {
   const trimmed = name.trim();
   if (!trimmed) return 'Makineye bir ad verin.';
   if (trimmed.length > 40) return 'Ad en fazla 40 karakter olabilir.';
   const key = trimmed.toLocaleLowerCase('tr');
-  const active = exercise.equipment.filter((equipment) => !equipment.archived);
+  // Değiştirilen makinenin kendi adı sayılmaz.
+  const active = exercise.equipment.filter((equipment) => !equipment.archived && equipment.id !== equipmentId);
   if (active.some((equipment) => equipment.name.trim().toLocaleLowerCase('tr') === key)) {
     return 'Bu adda bir makine zaten var.';
   }
@@ -265,6 +266,31 @@ export function withEquipment(program, exerciseId, equipment) {
 
 // Makineyi siler: kaydı olmayan makine listeden tamamen kalkar; kaydı olan makine, eski kayıtlar
 // bozulmasın diye arşivlenir (seçim listesinden kalkar). Programın kopyasını döndürür.
+const mapEquipment = (program, exerciseId, equipmentId, change) => {
+  const exercise = program.exercises[exerciseId];
+  const equipment = exercise.equipment.map((option) => (option.id === equipmentId ? change(option) : option));
+  return { ...program, exercises: { ...program.exercises, [exerciseId]: { ...exercise, equipment } } };
+};
+
+// Makinenin adı ve birimi değişir. Kimlik aynı kaldığı için geçmiş kopmaz; eski kayıtlar
+// antrenmandaki adı gösterir. Kaydı olan makinenin birimini ekran değiştirtmez.
+export function changedEquipment(program, exerciseId, equipmentId, { name, unit }) {
+  return mapEquipment(program, exerciseId, equipmentId, (option) => ({ ...option, name: name.trim(), unit }));
+}
+
+// Silinmiş (arşivlenmiş) makine geri alınır; aynı adda etkin bir makine varsa önce o yeniden adlandırılmalı.
+export function restoreError(exercise, equipmentId) {
+  const equipment = exercise.equipment.find((option) => option.id === equipmentId);
+  const taken = exercise.equipment.some(
+    (option) => !option.archived && option.name.trim().toLocaleLowerCase('tr') === equipment.name.trim().toLocaleLowerCase('tr'),
+  );
+  return taken ? `"${equipment.name}" adında etkin bir makine var. Geri almadan önce onun adını değiştirin.` : '';
+}
+
+export function restoredEquipment(program, exerciseId, equipmentId) {
+  return mapEquipment(program, exerciseId, equipmentId, ({ archived, ...option }) => option);
+}
+
 export function withoutEquipment(program, exerciseId, equipmentId, used) {
   const exercise = program.exercises[exerciseId];
   const equipment = used.has(equipmentId)
@@ -749,20 +775,17 @@ export function movedItem(program, dayId, itemId, delta) {
   }));
 }
 
-// Yeni hareket makinesiz başlar; makineleri kullanıcı antrenman kartında ekler.
+// Yeni hareket makinesiz başlar; makineleri kullanıcı antrenman kartında ekler. Katalog değişikliği
+// günleri değiştirmediği için program "düzenlendi" (customized) sayılmaz.
 export function withExercise(program, exerciseId, name) {
-  return customized(program, {
-    exercises: { ...program.exercises, [exerciseId]: { name: name.trim(), equipment: [] } },
-  });
+  return { ...program, exercises: { ...program.exercises, [exerciseId]: { name: name.trim(), equipment: [] } } };
 }
 
 // "Adı düzelt": ad her günde değişir. Kimlik aynı kaldığı için geçmiş kopmaz; eski kayıtlar
 // antrenman sırasında kopyalanan adı gösterir.
 export function renamedExercise(program, exerciseId, name) {
   const exercise = program.exercises[exerciseId];
-  return customized(program, {
-    exercises: { ...program.exercises, [exerciseId]: { ...exercise, name: name.trim() } },
-  });
+  return { ...program, exercises: { ...program.exercises, [exerciseId]: { ...exercise, name: name.trim() } } };
 }
 
 // "Programı sıfırla": günler, satırlar, hedefler ve başlangıç hareketlerinin adları başlangıç
@@ -774,4 +797,13 @@ export function resetProgram(program, seed) {
   }
   const { customized: _, ...rest } = program;
   return { ...rest, exercises, days: structuredClone(seed.days) };
+}
+
+// Hareketin programdaki ilk satırının hedefi; programda yoksa null. "+ Hareket ekle" formunu doldurur.
+export function programTarget(program, exerciseId) {
+  for (const day of program.days) {
+    const item = day.items.find((candidate) => candidate.options.includes(exerciseId));
+    if (item) return { sets: item.sets, repMin: item.repMin, repMax: item.repMax };
+  }
+  return null;
 }

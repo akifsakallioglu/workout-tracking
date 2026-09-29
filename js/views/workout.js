@@ -3,20 +3,29 @@
 // bitirir, "İptal" siler. Seti girilmeyen hareket atlanır ve kayda yazılmaz.
 // Düzenleme modu (editSessionId): geçmiş bir antrenman aynı kartlarla düzeltilir; otomatik kaydetme
 // yoktur, "Kaydet" ile kaydedilir. "Geçen sefer" ve sayaç o antrenmandan önceki kayıtlara göredir.
+// "+ Hareket ekle" programı değiştirmeden yalnızca bu antrenmana hareket ekler.
 import {
   activeSession,
   buildSession,
+  changedEquipment,
   defaultEquipmentId,
   equipmentError,
   equipmentUseCount,
   evaluateCards,
+  exerciseNameError,
   formatDateTime,
   formatDay,
   formatWeight,
+  itemTitle,
   lastPerformance,
+  parseTarget,
+  programTarget,
+  restoreError,
+  restoredEquipment,
   suggestOption,
   usedEquipmentIds,
   withEquipment,
+  withExercise,
   withoutEquipment,
 } from '../logic.js';
 import {
@@ -35,6 +44,7 @@ import { cardHtml, cardLiveText, isInvalid } from './exercise-card.js';
 
 // Yazmayı bırakınca kaydetmeden önce beklenen süre.
 const SAVE_DELAY = 500;
+const NEW = '+yeni'; // "+ Hareket ekle" seçim kutusunda "+ Yeni hareket"
 
 // Kayıt durumunun metni, son yazmanın neyi kaydettiğine göre değişir.
 const STATUS_TEXT = {
@@ -68,6 +78,24 @@ const STATUS_TEXT = {
     error: 'Makine silinemedi.',
     keep: 'makine listede duruyor.',
   },
+  machineEdit: {
+    saving: 'Makine kaydediliyor…',
+    saved: 'Makine kaydedildi ✓',
+    error: 'Makine kaydedilemedi.',
+    keep: 'girdiğiniz ad ve birim formda duruyor.',
+  },
+  machineRestore: {
+    saving: 'Makine geri alınıyor…',
+    saved: 'Makine geri alındı ✓',
+    error: 'Makine geri alınamadı.',
+    keep: 'makine silinmiş makineler listesinde duruyor.',
+  },
+  exercise: {
+    saving: 'Hareket ekleniyor…',
+    saved: 'Hareket eklendi ✓',
+    error: 'Hareket eklenemedi.',
+    keep: 'girdiğiniz değerler formda duruyor.',
+  },
   edit: {
     saving: 'Kaydediliyor…',
     saved: 'Kaydedildi ✓',
@@ -96,19 +124,22 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
 
   const available = (exercise, equipmentId) =>
     exercise.equipment.some((equipment) => equipment.id === equipmentId && !equipment.archived);
-  const newCard = (item) => {
+  // exercises: antrenman sırasında yeni hareket eklendiyse güncel katalog.
+  const newCard = (item, exercises = program.exercises) => {
     // Dönüşümlü satırda önerilen hareket seçili gelir; tek hareketli satırda o hareket.
     const { exerciseId } = suggestOption(sessions, day.id, item.options);
     return {
       item,
       exerciseId,
-      equipmentId: defaultEquipmentId(sessions, day.id, exerciseId, program.exercises[exerciseId]),
+      equipmentId: defaultEquipmentId(sessions, day.id, exerciseId, exercises[exerciseId]),
       weight: '',
       reps: Array.from({ length: item.sets }, () => ''),
       problems: [],
       message: '',
       machineForm: null, // { name, unit, error }: açıkken yeni makine formu görünür
-      editingMachines: false, // açıkken makineler "Sil" düğmeleriyle listelenir
+      editingMachines: false, // açıkken makineler "Değiştir", "Sil" ve "Geri al" düğmeleriyle listelenir
+      machineEdit: null, // { equipmentId, name, unit, error }: açıkken o makinenin adı ve birimi değişir
+      extra: false, // "+ Hareket ekle" ile yalnızca bu antrenmana eklendi
     };
   };
   // Devam eden antrenmanın taslağından kart; hedef, antrenman başlarken kopyalanan hâlidir.
@@ -122,6 +153,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
         : defaultEquipmentId(sessions, day.id, draft.exerciseId, exercise),
       weight: draft.weight,
       reps: [...draft.reps],
+      extra: Boolean(draft.extra),
     };
   };
   // Geçmiş bir kaydın girişinden kart: hedef kayıttaki kopyadır; makine sonradan silindiyse korunur.
@@ -137,7 +169,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
   let cards;
   if (editing) cards = editing.entries.map(cardFromEntry);
   else if (active?.draft) cards = active.draft.cards.map(cardFromDraft);
-  else cards = day.items.map(newCard);
+  else cards = day.items.map((item) => newCard(item));
 
   const state = {
     program,
@@ -151,6 +183,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     message: '',
     busy: false,
     ending: false, // bitirme ya da silme sürüyor: taslak artık kaydedilmez
+    extraForm: null, // "+ Hareket ekle" formu: { exerciseId, name, sets, repMin, repMax, targetTouched, error, field }
     saved: false, // bitirildi ya da silindi
     timer: null,
     retry: null, // "Tekrar dene"nin yeniden çalıştıracağı işlem
@@ -196,12 +229,64 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
         ${state.cards.map((card, index) => cardHtml(card, index, cardContext())).join('')}
       </div>
       ${state.cards.length ? '' : `
-        <p class="muted empty-state">Bu günde hareket yok. <a href="#/program/${escapeHtml(day.id)}">Satır ekleyin</a></p>`}
+        <p class="muted empty-state">Bu günde hareket yok. <a href="#/program/${escapeHtml(day.id)}">Satır ekleyin</a> ya da bu antrenmana hareket ekleyin.</p>`}
+      ${state.extraForm ? extraFormHtml() : `
+        <div class="add-exercise">
+          <button type="button" class="button secondary" data-action="open-extra"${disabled}>+ Hareket ekle</button>
+        </div>`}
       ${editing ? '' : `
         <div class="page-actions">
           <button type="button" class="button danger" data-action="cancel"${disabled}>Antrenmanı iptal et</button>
         </div>`}`;
     renderStatus();
+  }
+
+  // "+ Hareket ekle": katalogdan (bu antrenmanda olmayan) hareket ya da yeni hareket ve hedefi.
+  function extraFormHtml() {
+    const form = state.extraForm;
+    const inCards = new Set(state.cards.flatMap((card) => card.item.options));
+    const choices = Object.entries(state.program.exercises)
+      .filter(([id]) => !inCards.has(id))
+      .sort(([, a], [, b]) => a.name.localeCompare(b.name, 'tr'));
+    const invalid = (field) => (form.field === field ? ' aria-invalid="true"' : '');
+    const number = (name, label, placeholder = '') => `
+      <div class="field">
+        <label for="extra-${name}">${label}</label>
+        <input id="extra-${name}" name="${name}" type="text" inputmode="numeric" autocomplete="off"
+          value="${escapeHtml(form[name])}" placeholder="${placeholder}"${invalid(name)}>
+      </div>`;
+    return `
+      <form class="card extra-form" data-form="extra" novalidate>
+        <p class="form-title">Bu antrenmana hareket ekle</p>
+        <p class="muted field-hint">Program değişmez; hareket yalnızca bu antrenmana eklenir.</p>
+        <div class="field">
+          <label for="extra-exercise">Hareket</label>
+          <select id="extra-exercise" name="exerciseId"${invalid('exerciseId')}>
+            <option value=""${form.exerciseId ? '' : ' selected'}>Hareket seçin</option>
+            ${choices.map(([id, exercise]) =>
+              `<option value="${escapeHtml(id)}"${id === form.exerciseId ? ' selected' : ''}>${escapeHtml(exercise.name)}</option>`).join('')}
+            <option value="${NEW}"${form.exerciseId === NEW ? ' selected' : ''}>+ Yeni hareket</option>
+          </select>
+        </div>
+        ${form.exerciseId === NEW ? `
+          <div class="field">
+            <label for="extra-name">Yeni hareketin adı</label>
+            <input id="extra-name" name="name" type="text" maxlength="60" autocomplete="off" value="${escapeHtml(form.name)}"${invalid('name')}>
+          </div>` : ''}
+        <fieldset class="target-fieldset">
+          <legend>Hedef</legend>
+          <div class="target-fields">
+            ${number('sets', 'Set')}
+            ${number('repMin', 'En az tekrar')}
+            ${number('repMax', 'En çok tekrar', 'aynı')}
+          </div>
+        </fieldset>
+        <p class="message" role="alert">${escapeHtml(form.error)}</p>
+        <div class="actions">
+          <button type="submit" class="button primary"${state.busy ? ' disabled' : ''}>Ekle</button>
+          <button type="button" class="button secondary" data-action="close-extra">Vazgeç</button>
+        </div>
+      </form>`;
   }
 
   function renderCard(index) {
@@ -283,12 +368,13 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     return {
       ...buildSession({ id: state.sessionId, startedAt: state.startedAt, finishedAt: null, day, entries: [] }),
       draft: {
-        cards: state.cards.map(({ item, exerciseId, equipmentId, weight, reps }) => ({
+        cards: state.cards.map(({ item, exerciseId, equipmentId, weight, reps, extra }) => ({
           item,
           exerciseId,
           equipmentId,
           weight,
           reps: [...reps],
+          ...(extra ? { extra: true } : {}),
         })),
       },
     };
@@ -486,6 +572,145 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     }
   }
 
+  // Makinenin adı ve birimi değişir; kaydı olan makinenin birimi kilitlidir. Kimlik aynı kaldığı için
+  // geçmiş kopmaz.
+  async function saveMachineEdit(index) {
+    const card = state.cards[index];
+    const form = card.machineEdit;
+    if (state.busy || !form) return;
+    const exercise = exerciseOf(card);
+    const current = exercise.equipment.find((option) => option.id === form.equipmentId);
+    const unit = usedEquipmentIds(state.sessions).has(current.id) ? current.unit : form.unit;
+    form.error = equipmentError(exercise, form.name, unit, current.id);
+    if (form.error) {
+      renderCard(index);
+      container.querySelector(`#machine-edit-name-${index}`)?.focus();
+      return;
+    }
+    if (form.name.trim() === current.name && unit === current.unit) {
+      card.machineEdit = null;
+      renderCard(index);
+      return;
+    }
+
+    const next = changedEquipment(state.program, card.exerciseId, current.id, { name: form.name, unit });
+    state.writeContext = 'machineEdit';
+    state.busy = true;
+    renderCard(index);
+    try {
+      await saveProgram(next);
+      state.program = next;
+      card.machineEdit = null;
+      clearProblems(card);
+      state.retry = null;
+    } catch (error) {
+      console.warn('Makine kaydedilemedi', error);
+      state.retry = () => saveMachineEdit(index);
+    } finally {
+      state.busy = false;
+      render();
+    }
+  }
+
+  async function restoreMachine(index, equipmentId) {
+    const card = state.cards[index];
+    if (state.busy) return;
+    const exercise = exerciseOf(card);
+    card.message = restoreError(exercise, equipmentId);
+    if (card.message) {
+      renderCard(index);
+      return;
+    }
+
+    const next = restoredEquipment(state.program, card.exerciseId, equipmentId);
+    state.writeContext = 'machineRestore';
+    state.busy = true;
+    renderCard(index);
+    try {
+      await saveProgram(next);
+      state.program = next;
+      // Makinesi seçili olmayan kartta geri alınan makine seçili gelir.
+      let selected = false;
+      for (const other of state.cards) {
+        if (other.exerciseId === card.exerciseId && !equipmentOf(other)) {
+          other.equipmentId = equipmentId;
+          selected = true;
+        }
+      }
+      state.retry = null;
+      if (selected) requestSave(true, 'machineRestore');
+    } catch (error) {
+      console.warn('Makine geri alınamadı', error);
+      state.retry = () => restoreMachine(index, equipmentId);
+    } finally {
+      state.busy = false;
+      render();
+    }
+  }
+
+  // "+ Hareket ekle": kart bu antrenmanın sonuna eklenir; program değişmez. Yeni hareket seçildiyse
+  // önce katalogda (makinesiz) oluşturulur.
+  async function addExtra() {
+    const form = state.extraForm;
+    if (state.busy || !form) return;
+    const fail = (error, field) => {
+      form.error = error;
+      form.field = field;
+      render();
+      container.querySelector(`#extra-${field === 'exerciseId' ? 'exercise' : field}`)?.focus();
+    };
+    if (!form.exerciseId) return fail('Bir hareket seçin.', 'exerciseId');
+    if (form.exerciseId === NEW) {
+      const error = exerciseNameError(state.program, form.name);
+      if (error) return fail(error, 'name');
+    }
+    const parsed = parseTarget(form);
+    if (parsed.error) return fail(parsed.error, parsed.field);
+
+    let { exerciseId } = form;
+    if (exerciseId === NEW) {
+      exerciseId = `ex-${createId()}`;
+      const next = withExercise(state.program, exerciseId, form.name);
+      state.writeContext = 'exercise';
+      state.busy = true;
+      render();
+      try {
+        await saveProgram(next);
+        state.program = next;
+        form.exerciseId = exerciseId; // yeniden denenirse aynı hareket kullanılsın
+        state.retry = null;
+      } catch (error) {
+        console.warn('Hareket eklenemedi', error);
+        state.retry = addExtra;
+        state.busy = false;
+        render();
+        return;
+      }
+      state.busy = false;
+    }
+
+    const item = { id: `extra-${createId()}`, options: [exerciseId], ...parsed.target };
+    state.cards.push({ ...newCard(item, state.program.exercises), extra: true });
+    state.extraForm = null;
+    render();
+    const added = container.querySelector(`[data-card="${state.cards.length - 1}"]`);
+    added.scrollIntoView({ block: 'nearest' });
+    added.querySelector('input, button')?.focus();
+    requestSave(true);
+  }
+
+  // Sonradan eklenen kart kaldırılır; değer girildiyse önce sorulur.
+  function removeCard(index) {
+    const card = state.cards[index];
+    const hasCardValues = card.weight.trim() || card.reps.some((value) => value.trim());
+    const title = itemTitle(card.item, state.program.exercises);
+    if (hasCardValues && !confirm(`${title} bu antrenmandan kaldırılsın mı? Girdiğiniz değerler silinir.`)) return;
+    state.cards.splice(index, 1);
+    render();
+    container.querySelector('[data-action="open-extra"]')?.focus();
+    requestSave(true);
+  }
+
   // Düzeltilen kutuların işareti kalkar; kalan sorunların işaretleri durur.
   function syncInvalidMarks(cardElement, card) {
     for (const input of cardElement.querySelectorAll('input[data-field]')) {
@@ -507,11 +732,20 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
 
   container.addEventListener('input', (event) => {
     const { target } = event;
+    if (target.closest('[data-form="extra"]')) {
+      if (target.name in state.extraForm) state.extraForm[target.name] = target.value;
+      if (['sets', 'repMin', 'repMax'].includes(target.name)) state.extraForm.targetTouched = true;
+      return;
+    }
     const cardElement = target.closest('[data-card]');
     if (!cardElement) return;
     const card = state.cards[Number(cardElement.dataset.card)];
     if (target.name === 'name' && card.machineForm) {
       card.machineForm.name = target.value;
+      return;
+    }
+    if (target.name === 'editName' && card.machineEdit) {
+      card.machineEdit.name = target.value;
       return;
     }
     const { field } = target.dataset;
@@ -543,6 +777,23 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
 
   container.addEventListener('change', (event) => {
     const { target } = event;
+    if (target.closest('[data-form="extra"]')) {
+      if (target.name !== 'exerciseId') return;
+      const form = state.extraForm;
+      form.exerciseId = target.value;
+      form.error = '';
+      form.field = null;
+      // Hedef kutularına dokunulmadıysa hareketin programdaki hedefi gelir.
+      const planned = programTarget(state.program, target.value);
+      if (planned && !form.targetTouched) {
+        form.sets = String(planned.sets);
+        form.repMin = String(planned.repMin);
+        form.repMax = planned.repMax === planned.repMin ? '' : String(planned.repMax);
+      }
+      render();
+      container.querySelector(form.exerciseId === NEW ? '#extra-name' : '#extra-exercise')?.focus();
+      return;
+    }
     const cardElement = target.closest('[data-card]');
     if (!cardElement) return;
     const index = Number(cardElement.dataset.card);
@@ -552,6 +803,8 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       if (state.timer) saveNow();
     } else if (target.name === `unit-${index}` && card.machineForm) {
       card.machineForm.unit = target.value;
+    } else if (target.name === `edit-unit-${index}` && card.machineEdit) {
+      card.machineEdit.unit = target.value;
     } else if (target.name === `equipment-${index}`) {
       card.equipmentId = target.value;
       clearProblems(card);
@@ -569,8 +822,15 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
 
   container.addEventListener('submit', (event) => {
     event.preventDefault();
+    const { form } = event.target.dataset;
+    if (form === 'extra') {
+      addExtra();
+      return;
+    }
     const cardElement = event.target.closest('[data-card]');
-    if (cardElement && event.target.dataset.form === 'machine') addMachine(Number(cardElement.dataset.card));
+    if (!cardElement) return;
+    if (form === 'machine') addMachine(Number(cardElement.dataset.card));
+    else if (form === 'machine-edit') saveMachineEdit(Number(cardElement.dataset.card));
   });
 
   container.addEventListener('click', (event) => {
@@ -608,10 +868,38 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
         break;
       case 'done-editing':
         card.editingMachines = false;
+        card.machineEdit = null;
         renderCard(index);
         break;
       case 'delete-machine':
         deleteMachine(index, actionElement.dataset.equipment);
+        break;
+      case 'edit-machine': {
+        const equipment = exerciseOf(card).equipment.find((option) => option.id === actionElement.dataset.equipment);
+        card.machineEdit = { equipmentId: equipment.id, name: equipment.name, unit: equipment.unit, error: '' };
+        renderCard(index);
+        container.querySelector(`#machine-edit-name-${index}`).focus();
+        break;
+      }
+      case 'cancel-machine-edit':
+        card.machineEdit = null;
+        renderCard(index);
+        break;
+      case 'restore-machine':
+        restoreMachine(index, actionElement.dataset.equipment);
+        break;
+      case 'open-extra':
+        state.extraForm = { exerciseId: '', name: '', sets: '3', repMin: '', repMax: '', targetTouched: false, error: '', field: null };
+        render();
+        container.querySelector('#extra-exercise').focus();
+        break;
+      case 'close-extra':
+        state.extraForm = null;
+        render();
+        container.querySelector('[data-action="open-extra"]')?.focus();
+        break;
+      case 'remove-card':
+        removeCard(index);
         break;
       case 'add-set':
         card.reps.push('');

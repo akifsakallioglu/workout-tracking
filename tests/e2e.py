@@ -1661,6 +1661,212 @@ def program_editor_steps(run):
     ]
 
 
+
+# ---------------------------------------------------------------- Makine yönetimi ve "+ Hareket ekle"
+
+def machine_rows(scope):
+    return scope.locator(".machine-list:not(.archived) li")
+
+
+def archived_rows(scope):
+    return scope.locator(".machine-list.archived li")
+
+
+def extra_form(page):
+    return page.locator("[data-form='extra']")
+
+
+def machine_management_steps(run):
+    def rename_machine(page):
+        page.goto(run.base_url + "/")
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        add_machine(rope, "Kablo 2", "kademe")
+        radio(rope, "Kablo · kg").check()
+        log_sets(rope, "40", ["12", "12"])
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        rope.get_by_role("button", name="Düzenle").click()
+        rope.get_by_role("button", name="Kablo makinesini değiştir").click()
+        name = rope.get_by_label("Makinenin adı")
+        expect(name).to_be_focused()
+        expect(name).to_have_value("Kablo")
+        expect(rope.locator(".unit-locked")).to_have_text("Birim: kg (bu makinede kayıt olduğu için değiştirilemez)")
+        name.fill("kablo 2")
+        rope.get_by_role("button", name="Kaydet").click()
+        expect(rope.locator(".machine-message")).to_have_text("Bu adda bir makine zaten var.")
+        rope.get_by_label("Makinenin adı").fill("Halat")
+        rope.get_by_role("button", name="Kaydet").click()
+        expect(save_status(page)).to_have_text("Makine kaydedildi ✓")
+        expect(machine_rows(rope).first).to_contain_text("Halat · kg")
+        rope.get_by_role("button", name="Bitti").click()
+        expect(radio(rope, "Halat · kg")).to_be_checked()
+        expect(last_time(rope)).to_contain_text("40 kg × 12 · 12")
+        go_home(page)
+        page.get_by_role("link", name="Geçmiş").click()
+        history_rows(page).first.click()
+        expect(page.locator(".entry h2")).to_have_text("Rope Pushdown · Kablo")  # kayıt, antrenmandaki adı taşır
+        page.get_by_role("link", name="← Geçmiş").click()
+        page.get_by_role("link", name="← Günler").click()
+
+    def change_unit_of_unused(page):
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        rope.get_by_role("button", name="Düzenle").click()
+        rope.get_by_role("button", name="Kablo 2 makinesini değiştir").click()
+        expect(rope.locator(".unit-locked")).to_have_count(0)
+        expect(rope.get_by_role("radio", name="kademe", exact=True)).to_be_checked()
+        rope.get_by_role("radio", name="kg", exact=True).check()
+        page.screenshot(path=str(ARTIFACTS / "asama10-makine-degistir.png"), full_page=True)
+        rope.get_by_role("button", name="Kaydet").click()
+        expect(machine_rows(rope).nth(1)).to_contain_text("Kablo 2 · kg")
+        rope.get_by_role("button", name="Bitti").click()
+        radio(rope, "Kablo 2 · kg").check()
+        expect(weight_label(rope)).to_have_text("Ağırlık (kg)")
+        saved = stored_program(page)["exercises"]["rope-pushdown"]["equipment"]
+        assert [(item["name"], item["unit"]) for item in saved] == [("Halat", "kg"), ("Kablo 2", "kg")], saved
+
+    def delete_and_restore(page):
+        rope = card(page, "Rope Pushdown")
+        rope.get_by_role("button", name="Düzenle").click()
+        delete_machine(page, rope, "Halat", accept=True)
+        expect(save_status(page)).to_have_text("Makine silindi ✓")
+        expect(archived_rows(rope)).to_have_count(1)
+        expect(archived_rows(rope).first).to_contain_text("Halat · kg")
+        # Silinen makinenin adı başka makinede kullanılınca geri alma, önce ad değişikliğini ister.
+        rope.get_by_role("button", name="Kablo 2 makinesini değiştir").click()
+        rope.get_by_label("Makinenin adı").fill("Halat")
+        rope.get_by_role("button", name="Kaydet").click()
+        expect(machine_rows(rope).first).to_contain_text("Halat · kg")
+        rope.get_by_role("button", name="Halat makinesini geri al").click()
+        expect(rope.locator(".card-message")).to_have_text('"Halat" adında etkin bir makine var. Geri almadan önce onun adını değiştirin.')
+        rope.get_by_role("button", name="Halat makinesini değiştir").click()
+        rope.get_by_label("Makinenin adı").fill("Kablo 2")
+        rope.get_by_role("button", name="Kaydet").click()
+        expect(machine_rows(rope).first).to_contain_text("Kablo 2 · kg")
+        rope.get_by_role("button", name="Halat makinesini geri al").click()
+        expect(save_status(page)).to_have_text("Makine geri alındı ✓")
+        expect(archived_rows(rope)).to_have_count(0)
+        page.screenshot(path=str(ARTIFACTS / "asama10-makineler.png"), full_page=True)
+        rope.get_by_role("button", name="Bitti").click()
+        assert machine_names(rope) == ["Halat · kg", "Kablo 2 · kg"], machine_names(rope)
+        radio(rope, "Halat · kg").check()
+        expect(last_time(rope)).to_contain_text("40 kg × 12 · 12")
+        go_home(page)
+
+    def add_exercise_to_workout(page):
+        open_day(page, "pull", "Pull")
+        page.get_by_role("button", name="+ Hareket ekle").click()
+        form = extra_form(page)
+        expect(form.get_by_label("Hareket", exact=True)).to_be_focused()
+        form.get_by_role("button", name="Ekle").click()
+        expect(form.locator(".message")).to_have_text("Bir hareket seçin.")
+        expect(form.locator("option", has_text="Face Pull")).to_have_count(0)  # bu antrenmanda zaten var
+        form.get_by_label("Hareket", exact=True).select_option(label="Rope Pushdown")
+        expect(form.get_by_label("Set", exact=True)).to_have_value("3")
+        expect(form.get_by_label("En az tekrar", exact=True)).to_have_value("12")
+        expect(form.get_by_label("En çok tekrar", exact=True)).to_have_value("15")
+        form.get_by_role("button", name="Ekle").click()
+        rope = card(page, "Rope Pushdown")
+        expect(rope.locator(".extra-row .muted")).to_have_text("Yalnızca bu antrenmana eklendi")
+        expect(rope.locator(".target")).to_have_text("Hedef 3 × 12–15")
+        expect(radio(rope, "Halat · kg")).to_be_checked()
+        expect(last_time(rope)).to_have_text("Bu makinede önceki kayıt yok")  # Push kaydı Pull'a karışmaz
+
+        page.get_by_role("button", name="+ Hareket ekle").click()
+        form = extra_form(page)
+        expect(form.locator("option", has_text="Rope Pushdown")).to_have_count(0)
+        form.get_by_label("Hareket", exact=True).select_option(label="+ Yeni hareket")
+        expect(form.get_by_label("Yeni hareketin adı")).to_be_focused()
+        form.get_by_label("Yeni hareketin adı").fill("face pull")
+        form.get_by_role("button", name="Ekle").click()
+        expect(form.locator(".message")).to_have_text("Bu adda bir hareket zaten var.")
+        form.get_by_label("Yeni hareketin adı").fill("Hammer Curl")
+        form.get_by_label("En az tekrar", exact=True).fill("10")
+        form.get_by_label("En çok tekrar", exact=True).fill("12")
+        page.screenshot(path=str(ARTIFACTS / "asama10-hareket-ekle.png"), full_page=True)
+        form.get_by_role("button", name="Ekle").click()
+        expect(save_status(page)).to_have_text("Hareket eklendi ✓")
+        hammer = card(page, "Hammer Curl")
+        expect(hammer.locator(".target")).to_have_text("Hedef 3 × 10–12")
+        expect(hammer.locator(".no-machine")).to_have_count(1)
+        add_machine(hammer, "Dambıl", "kg")
+        log_sets(hammer, "12", ["10", "10"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+
+    def extra_cards_survive_reload(page):
+        page.reload()
+        expect(page.locator(".topbar h1")).to_have_text("Pull")
+        hammer = card(page, "Hammer Curl")
+        expect(hammer.locator(".extra-row")).to_have_count(1)
+        expect(weight_input(hammer)).to_have_value("12")
+        rope = card(page, "Rope Pushdown")
+        rope.get_by_role("button", name="Rope Pushdown hareketini bu antrenmandan kaldır").click()  # değer yok: sorulmaz
+        expect(card(page, "Rope Pushdown")).to_have_count(0)
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        hammer.get_by_role("button", name="Hammer Curl hareketini bu antrenmandan kaldır").click()
+        expect(card(page, "Hammer Curl")).to_have_count(1)
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Pull antrenmanı kaydedildi ✓")
+        pull = next(session for session in sessions(page) if session["dayId"] == "pull")
+        entry = pull["entries"][0]
+        assert (entry["name"], entry["target"]) == ("Hammer Curl", {"sets": 3, "repMin": 10, "repMax": 12}), entry
+        program = stored_program(page)
+        assert len(program["days"][1]["items"]) == 8, "Program değişmemeli"
+        assert "customized" not in program, program.keys()
+
+    def next_workout_without_extra(page):
+        open_day(page, "pull", "Pull")
+        expect(page.locator("[data-card]")).to_have_count(8)
+        expect(card(page, "Hammer Curl")).to_have_count(0)
+        go_home(page)
+        page.get_by_role("link", name="İlerleme").click()
+        other = page.locator(".days .day").filter(has_text="Hammer Curl")
+        expect(other.locator(".muted")).to_contain_text("Pull · 1 antrenman")
+        page.get_by_role("link", name="← Günler").click()
+
+    def add_exercise_while_editing_history(page):
+        page.get_by_role("link", name="Geçmiş").click()
+        history_rows(page).first.click()
+        expect(page.get_by_role("heading", level=1)).to_contain_text("Pull · ")
+        page.get_by_role("link", name="Düzenle").click()
+        page.get_by_role("button", name="+ Hareket ekle").click()
+        extra_form(page).get_by_label("Hareket", exact=True).select_option(label="Cable Row")
+        expect(extra_form(page).get_by_label("En az tekrar", exact=True)).to_have_value("12")
+        extra_form(page).get_by_role("button", name="Ekle").click()
+        row = card(page, "Cable Row")
+        add_machine(row, "Kablo", "kg")
+        log_sets(row, "35", ["12"])
+        page.get_by_role("button", name="Kaydet", exact=True).click()
+        expect(page.locator("#flash")).to_have_text("Değişiklikler kaydedildi ✓")
+        expect(page.locator(".entry h2")).to_have_text(["Hammer Curl · Dambıl", "Cable Row · Kablo"])
+        page.get_by_role("link", name="← Geçmiş").click()
+        page.get_by_role("link", name="← Günler").click()
+
+    def row_editor_lists_machines(page):
+        page.get_by_role("link", name="Programı düzenle").click()
+        page.locator(".program-link").filter(has_text="Push").click()
+        page.locator(".program-link").filter(has=page.get_by_text("Rope Pushdown", exact=True)).click()
+        expect(page.locator(".machine-summary")).to_have_text("Makineler: Halat · kg, Kablo 2 · kg")
+        page.get_by_label("İkinci hareket (isteğe bağlı)").select_option(label="Face Pull")
+        expect(page.locator(".machine-summary").nth(1)).to_have_text("Henüz makine yok")
+
+    return [
+        ("Makinenin adı değişiyor; kaydı olan makinenin birimi kilitli; geçmiş kopmuyor", rename_machine),
+        ("Kaydı olmayan makinenin birimi değişiyor", change_unit_of_unused),
+        ("Silinen makine geri alınıyor; aynı adda etkin makine varken önce ad değişikliği isteniyor", delete_and_restore),
+        ("'+ Hareket ekle': katalogdan ya da yeni hareket; hedef programdan geliyor", add_exercise_to_workout),
+        ("Eklenen kartlar sayfa yenilenince duruyor, kaldırılabiliyor; kayda yazılıyor, program değişmiyor", extra_cards_survive_reload),
+        ("Sonraki antrenmanda eklenen hareket yok; İlerleme'de 'Programda olmayan' altında", next_workout_without_extra),
+        ("Geçmiş düzenlerken de '+ Hareket ekle' ile hareket ekleniyor", add_exercise_while_editing_history),
+        ("Program satır formu hareketin makinelerini gösteriyor", row_editor_lists_machines),
+    ]
+
+
 # ---------------------------------------------------------------- İnternetsiz çalışma ve güncelleme
 
 WAIT_FOR_CONTROLLER = "navigator.serviceWorker.controller !== null"
@@ -2024,6 +2230,7 @@ def main():
             run.flow("Geçmiş ve düzeltme", history_steps(run))
             run.flow("İlerleme grafikleri", progress_steps(run))
             run.flow("Program düzenleyici", program_editor_steps(run))
+            run.flow("Makine yönetimi ve hareket ekleme", machine_management_steps(run))
             run.flow("İnternetsiz çalışma", offline_steps(run))
             run.flow("Yeni sürüm ve güncelleme", update_steps(copy_url, app_copy), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))

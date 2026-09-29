@@ -176,6 +176,59 @@ h1 {
   border-radius: 10px;
 }
 
+.machine-list li.editing {
+  display: block;
+  padding: 12px;
+}
+
+.machine-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.archived-title {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.machine-list.archived li {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.unit-locked {
+  margin-top: 12px;
+  font-size: 0.9375rem;
+}
+
+.machine-edit .units {
+  margin-top: 12px;
+}
+
+/* "+ Hareket ekle" ile yalnızca bu antrenmana eklenen kart */
+.extra-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 0.9375rem;
+}
+
+.add-exercise {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.extra-form {
+  margin-top: 12px;
+}
+
+.extra-form .field + .field {
+  margin-top: 12px;
+}
+
 .button.small.danger {
   border-color: var(--danger);
   color: var(--danger);
@@ -873,6 +926,11 @@ a.button {
 }
 
 .field-hint {
+  margin-top: 6px;
+  font-size: 0.875rem;
+}
+
+.machine-summary {
   margin-top: 6px;
   font-size: 0.875rem;
 }
