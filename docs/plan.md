@@ -273,6 +273,8 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 
 **Aşama 6: İlerleme sayacı**
 - 4. bölümdeki kurallar saf fonksiyon olarak yazılır ve kartta gösterilir.
+- Sayaç metinleri: "Son ilerlemeden beri N antrenman", hiç ilerleme yoksa "İlk kayıttan beri N antrenman", son antrenmanda ilerleme varsa "Geçen antrenmanda ilerledin"; tek kayıt varken sayaç görünmez. Set girerken artış varsa "Bu antrenmanda ilerledin ✓", önceki kayıt yoksa "İlk kayıt: başlangıç noktası".
+- Kullanıcının isteğiyle bu aşamada makine silme de geldi: kartta "Düzenle" → "Sil" → onay. Kaydı olmayan makine tamamen silinir, kaydı olan arşivlenir. Uygulama simgesi kullanıcının seçtiği görselle değişti.
 - *Bitti sayılır:*
   - Tablodaki her örnek testte doğru sonucu veriyor.
   - Makine B kullanılınca makine A'nın sayacı değişmiyor.

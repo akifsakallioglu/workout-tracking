@@ -12,13 +12,14 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 ## Veri kuralları
 - Geçmişin anahtarı gün + hareket + makine (`dayId` + `exerciseId` + `equipmentId`). Farklı günler ve makineler birbirine karışmaz.
 - Her makinenin tek birimi var: `kg`, `level` (kademe), `none` (ağırlıksız). Birimler dönüştürülmez. Kaydı olan makinenin birimi değiştirilemez.
-- Makineler harekete aittir. Hareketler makinesiz başlar (varsayılan makine yok); makinelerin hepsini kullanıcı "+ Makine" ile ekler ve birimi kendisi seçer (varsayılan birim yok). Eklenen makine hemen kaydedilir. Kaydı olan makine silinmez, arşivlenir; arşivlenen makinenin adı yeniden kullanılabilir. Kullanıcının eklediği makinelerin kimliği `eq-` ile başlar.
+- Makineler harekete aittir. Hareketler makinesiz başlar (varsayılan makine yok); makinelerin hepsini kullanıcı "+ Makine" ile ekler ve birimi kendisi seçer (varsayılan birim yok). Eklenen makine hemen kaydedilir. Makine kartın "Düzenle" modundan onayla silinir: kaydı olmayan makine tamamen kalkar, kaydı olan arşivlenir (listeden kalkar, eski kayıtlar bozulmaz); arşivlenen makinenin adı yeniden kullanılabilir. Kullanıcının eklediği makinelerin kimliği `eq-` ile başlar.
 - Program ilk açılışta `js/seed.js`'ten veritabanına (`meta` deposu, `program` anahtarı) yazılır; sonra oradan okunur. Başlangıç programı değişince `SEED_VERSION` artırılır: kayıtlı program yükseltilir (günler yeni programdan gelir, kullanıcının makineleri korunur). 3. sürümden önceki varsayılan makineler yükseltmede kaldırılır; kaydı olanlar arşivlenir.
 - Antrenman başlarken hareket adı, makine adı, birim ve hedef kayda kopyalanır. Program değişince eski kayıtlar değişmez.
 - Ağırlık hareket başına bir kez girilir ve tekrarı girilen her sete uygulanır; kayıtta her set bu ağırlığı taşır. Ağırlıksız makinede yalnızca tekrar girilir. Tekrar girilip ağırlık girilmezse ya da yalnızca ağırlık girilirse uyarı verir; boş tekrar kutusu kaydedilmez. Önceki değerler yalnızca ipucudur, kutuları doldurmaz.
 - Varsayılan makine: o gün o harekette en son kullanılan makine; yoksa listedeki ilk makine.
 - Seti girilmemiş hareket "atlandı" sayılır ve kayda yazılmaz. Bitmemiş antrenmanlar hesaplara katılmaz.
 - "Geçen sefer", ilerleme sayacı, dönüşüm önerisi ve grafikler kayıtlardan hesaplanır; veritabanına yazılmaz.
+- İlerleme: bugünkü setler aynı anahtardaki bir önceki kayıtla set set karşılaştırılır; ağırlığı (kademesi) yüksek ya da ağırlığı aynı ve tekrarı yüksek bir set varsa ilerlemedir. Sayaç: son ilerlemeden sonraki bitmiş antrenman sayısı (hiç ilerleme yoksa ilk kayıttan). Kartta "Son ilerlemeden beri N antrenman" / "İlk kayıttan beri N antrenman" / "Geçen antrenmanda ilerledin"; set girerken "Bu antrenmanda ilerledin ✓".
 
 ## Ekranlar
 - `js/main.js` yönlendirir: `#/` ana ekran (`views/home.js`), `#/antrenman/<gün>` antrenman ekranı (`views/workout.js`), `#/ayarlar` ayarlar (`views/settings.js`). Kart `views/exercise-card.js` içindedir (Aşama 8'deki geçmiş düzenlemede de kullanılacak).
@@ -36,7 +37,7 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - `sw.js` uygulama dosyalarını sürümlü önbellekte saklar (önce önbellek). **Her yayında `VERSION` artırılır**; yeni dosya eklenince `FILES` listesine yazılır (uçtan uca test eksik ya da fazla dosyayı yakalar).
 - Bilgisayarda (localhost/127.0.0.1) service worker kapalıdır, yalnızca adreste `?sw=1` varsa çalışır.
 - Yeni sürüm hazır olunca "Yeni sürüm var: Güncelle" bandı çıkar; "Güncelle" bekleyen yazmaları bitirir, yazma başarısızsa güncellemez.
-- Yayın: GitHub Pages (`main` dalı, kök klasör), https://akifsakallioglu.github.io/workout-tracking/ — depo: https://github.com/akifsakallioglu/workout-tracking. Her push siteyi günceller; telefondaki uygulama ise yalnızca `VERSION` değişince yeni sürüme geçer. Push yalnızca kullanıcının onayıyla. Simgeler `tools/render_icons.py` ile SVG'den üretilir.
+- Yayın: GitHub Pages (`main` dalı, kök klasör), https://akifsakallioglu.github.io/workout-tracking/ — depo: https://github.com/akifsakallioglu/workout-tracking. Her push siteyi günceller; telefondaki uygulama ise yalnızca `VERSION` değişince yeni sürüme geçer. Simgeler `tools/render_icons.py` ile `icons/icon-source.png`'den üretilir (kullanıcının seçtiği görsel).
 - Bu depoda commit e-postası GitHub'ın gizli adresidir (`44166014+akifsakallioglu@users.noreply.github.com`, yerel git ayarı).
 
 ## Yedek
@@ -52,8 +53,8 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 
 ## Çalışma şekli
 - Küçük aşamalar: uygula → birim ve uçtan uca testler → `main` dalına commit ("Aşama N: …") → dur. Kullanıcı "devam" deyince sonraki aşamaya geçilir.
-- Push yalnızca kullanıcının onayıyla yapılır.
+- Her aşamanın sonunda, testler geçince commit GitHub'a da gönderilir (kullanıcının izni). Uygulama dosyası değiştiyse önce `sw.js` `VERSION` artırılır.
 - Yeni kararlar bu dosyaya işlenir.
 
 ## Aşamalar
-0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma ✓ (telefonda uçak modu denemesi kullanıcıda) · 6 İlerleme sayacı · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
+0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma ✓ (telefonda uçak modu denemesi kullanıcıda) · 6 İlerleme sayacı ✓ (makine silme ve yeni simge de) · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi

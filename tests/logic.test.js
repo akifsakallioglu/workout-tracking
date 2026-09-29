@@ -7,23 +7,30 @@ import {
   buildEntry,
   buildSession,
   collectSets,
+  counterText,
   defaultEquipmentId,
   equipmentError,
+  equipmentUseCount,
   evaluateCards,
   formatDateTime,
   formatSet,
   formatSets,
   formatTarget,
+  hasProgress,
   itemTitle,
   lastDoneDate,
   lastPerformance,
+  liveProgressText,
   nextDayId,
   parseBackup,
   parseReps,
   parseWeight,
+  progressCounter,
   upgradeProgram,
+  usedEquipmentIds,
   validationMessage,
   withEquipment,
+  withoutEquipment,
 } from '../js/logic.js';
 import { program as seed } from '../js/seed.js';
 
@@ -447,4 +454,95 @@ test('yedek hatırlatması: son yedekten ya da ilk antrenmandan bu yana 30 günd
   assertEqual(backupReminder('2026-09-24T12:00:00.000Z', [finishedOn('2026-08-20T12:00:00.000Z')], now), null);
   const unfinished = session({ id: 'devam', date: '2026-08-01T12:00:00.000Z', finished: false });
   assertEqual(backupReminder(undefined, [unfinished], now), null, 'bitmemiş antrenman sayılmaz');
+});
+
+// ---------------------------------------------------------------- Makine silme
+
+test('kaydı olmayan makine tamamen siliniyor, kaydı olan arşivleniyor', () => {
+  const program = {
+    exercises: {
+      'rope-pushdown': {
+        name: 'Rope Pushdown',
+        equipment: [{ id: 'k1', name: 'Kablo', unit: 'kg' }, { id: 'k2', name: 'Kablo 2', unit: 'level' }],
+      },
+    },
+    days: [],
+  };
+  const sessions = [session({ id: 'a', date: '2026-09-22T12:00:00.000Z', equipmentId: 'k1' })];
+  const used = usedEquipmentIds(sessions);
+  assertEqual(equipmentUseCount(sessions, 'k1'), 1);
+  assertEqual(equipmentUseCount(sessions, 'k2'), 0);
+  const withoutUnused = withoutEquipment(program, 'rope-pushdown', 'k2', used);
+  assertEqual(withoutUnused.exercises['rope-pushdown'].equipment, [{ id: 'k1', name: 'Kablo', unit: 'kg' }]);
+  const withoutUsed = withoutEquipment(program, 'rope-pushdown', 'k1', used);
+  assertEqual(withoutUsed.exercises['rope-pushdown'].equipment[0], { id: 'k1', name: 'Kablo', unit: 'kg', archived: true });
+  assertEqual(program.exercises['rope-pushdown'].equipment.length, 2, 'eski program değişmemeli');
+});
+
+// ---------------------------------------------------------------- İlerleme sayacı
+
+const sets = (text) => text.split(', ').map((set) => {
+  const [weight, reps] = set.includes('×') ? set.split('×') : [null, set];
+  return { weight: weight === null ? null : Number(weight.replace('k', '')), reps: Number(reps) };
+});
+
+test('ilerleme örnekleri (plandaki tablo)', () => {
+  const cases = [
+    ['40×12, 40×11, 40×10', '40×12, 40×12, 40×10', 'kg', true],
+    ['40×12, 40×12, 40×12', '45×9, 45×8, 45×8', 'kg', true],
+    ['40×12, 40×11, 40×10', '40×12, 40×11, 40×10', 'kg', false],
+    ['40×12, 40×11', '40×11, 40×12', 'kg', true],
+    ['40×12, 40×11, 40×10', '35×12, 35×12, 35×12', 'kg', false],
+    ['10k×12', '11k×8', 'level', true],
+    ['15, 14', '15, 15', 'none', true],
+  ];
+  for (const [before, now, unit, expected] of cases) {
+    assertEqual(hasProgress(sets(before), sets(now), unit), expected, `${before} → ${now}`);
+  }
+  assertEqual(liveProgressText(null, sets('40×12, 40×11, 40×10'), 'kg'), 'İlk kayıt: başlangıç noktası');
+  assertEqual(liveProgressText(sets('40×12, 40×11'), sets('40×12, 40×12'), 'kg'), 'Bu antrenmanda ilerledin ✓');
+  assertEqual(liveProgressText(sets('40×12, 40×11'), sets('40×12, 40×11'), 'kg'), '');
+  assertEqual(liveProgressText(sets('40×12'), [], 'kg'), '');
+});
+
+function calfSession(id, date, text, { dayId = 'legs', equipmentId = 'makine', finished = true } = {}) {
+  return session({ id, date, dayId, exerciseId: 'standing-calf-raise', equipmentId, sets: sets(text), finished });
+}
+
+const CALF = { dayId: 'legs', exerciseId: 'standing-calf-raise', equipmentId: 'makine' };
+
+test('sayaç: son ilerlemeden sonraki antrenman sayısı; ilerleme yoksa ilk kayıttan', () => {
+  assertEqual(progressCounter([], CALF), null);
+  const first = [calfSession('1', '2026-09-01T12:00:00.000Z', '40×12, 40×11')];
+  assertEqual(progressCounter(first, CALF), { count: 0, sinceFirst: true });
+  const flat = [...first, calfSession('2', '2026-09-08T12:00:00.000Z', '40×12, 40×11'), calfSession('3', '2026-09-15T12:00:00.000Z', '40×11, 40×11')];
+  assertEqual(progressCounter(flat, CALF), { count: 2, sinceFirst: true });
+  const progressed = [...flat, calfSession('4', '2026-09-22T12:00:00.000Z', '40×12, 40×12')];
+  assertEqual(progressCounter(progressed, CALF), { count: 0, sinceFirst: false });
+  const after = [...progressed, calfSession('5', '2026-09-29T12:00:00.000Z', '40×12, 40×12')];
+  assertEqual(progressCounter(after, CALF), { count: 1, sinceFirst: false });
+});
+
+test('sayaç: başka makine, başka gün, atlanan hareket ve bitmemiş antrenman etkilemez', () => {
+  const base = [
+    calfSession('1', '2026-09-01T12:00:00.000Z', '40×12'),
+    calfSession('2', '2026-09-08T12:00:00.000Z', '40×12'),
+  ];
+  const noise = [
+    calfSession('b', '2026-09-10T12:00:00.000Z', '60×15', { equipmentId: 'makine-b' }),
+    calfSession('lower', '2026-09-11T12:00:00.000Z', '80×15', { dayId: 'lower' }),
+    session({ id: 'atlandi', date: '2026-09-12T12:00:00.000Z', dayId: 'legs', exerciseId: 'leg-press' }),
+    calfSession('devam', '2026-09-13T12:00:00.000Z', '90×20', { finished: false }),
+  ];
+  assertEqual(progressCounter([...base, ...noise], CALF), progressCounter(base, CALF));
+  assertEqual(progressCounter([...base, ...noise], CALF), { count: 1, sinceFirst: true });
+  assertEqual(progressCounter(noise, { ...CALF, equipmentId: 'makine-b' }), { count: 0, sinceFirst: true });
+});
+
+test('sayaç metni', () => {
+  assertEqual(counterText(null), '');
+  assertEqual(counterText({ count: 0, sinceFirst: true }), '');
+  assertEqual(counterText({ count: 3, sinceFirst: true }), 'İlk kayıttan beri 3 antrenman');
+  assertEqual(counterText({ count: 0, sinceFirst: false }), 'Geçen antrenmanda ilerledin');
+  assertEqual(counterText({ count: 2, sinceFirst: false }), 'Son ilerlemeden beri 2 antrenman');
 });

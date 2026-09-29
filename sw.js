@@ -1,7 +1,7 @@
 // Service worker: uygulama dosyalarını telefonda saklar; uygulama internetsiz de açılır.
 // Her yayında VERSION artırılır. Yeni bir dosya eklenince FILES listesine de yazılır
 // (uçtan uca test, listede eksik dosya kalmadığını denetler).
-const VERSION = '1';
+const VERSION = '2';
 const CACHE = `antrenman-${VERSION}`;
 const FILES = [
   './',
@@ -22,7 +22,6 @@ const FILES = [
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',
-  'icons/icon.svg',
 ];
 
 self.addEventListener('install', (event) => {

@@ -146,6 +146,52 @@ h1 {
   margin-bottom: 8px;
 }
 
+.chip.edit {
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.machine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.machine-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 4px 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.button.small.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.counter {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.progress-live {
+  margin: 8px 0 0;
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.progress-live:empty {
+  display: none;
+}
+
 .chip.add {
   border-style: dashed;
   color: var(--accent);

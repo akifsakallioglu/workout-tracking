@@ -2,12 +2,16 @@
 // ekleme, geçen seferki performans, tek ağırlık kutusu ve her set için tekrar kutusu.
 import {
   UNIT_LABELS,
+  collectSets,
+  counterText,
   formatDate,
   formatSets,
   formatTarget,
   formatWeight,
   itemTitle,
   lastPerformance,
+  liveProgressText,
+  progressCounter,
 } from '../logic.js';
 import { escapeHtml } from '../ui.js';
 
@@ -35,11 +39,13 @@ export function cardHtml(card, index, { day, program, sessions, busy }) {
       <fieldset class="machines">
         <legend>Makine</legend>
         ${machines.length ? '' : '<p class="muted no-machine">Bu hareket için henüz makine yok. Kullandığınız makineyi ekleyin.</p>'}
-        <div class="chips">
-          ${machines.map((option) =>
-            radioChip(`equipment-${index}`, option.id, `${option.name} · ${UNIT_LABELS[option.unit]}`, option.id === equipment?.id)).join('')}
-          ${card.machineForm ? '' : '<button type="button" class="chip add" data-action="open-machine-form">+ Makine</button>'}
-        </div>
+        ${card.editingMachines && machines.length ? machineListHtml(machines, busy) : `
+          <div class="chips">
+            ${machines.map((option) =>
+              radioChip(`equipment-${index}`, option.id, `${option.name} · ${UNIT_LABELS[option.unit]}`, option.id === equipment?.id)).join('')}
+            ${card.machineForm ? '' : '<button type="button" class="chip add" data-action="open-machine-form">+ Makine</button>'}
+            ${machines.length && !card.machineForm ? '<button type="button" class="chip edit" data-action="edit-machines">Düzenle</button>' : ''}
+          </div>`}
       </fieldset>
       ${card.machineForm ? machineFormHtml(card.machineForm, index, busy) : ''}
       ${equipment ? logHtml(card, index, equipment, day, sessions) : ''}
@@ -53,10 +59,14 @@ function logHtml(card, index, equipment, day, sessions) {
   const last = lastPerformance(sessions, { dayId: day.id, exerciseId: card.exerciseId, equipmentId: equipment.id });
   const weightInvalid = isInvalid(card, 'weight');
 
+  const counter = counterText(progressCounter(sessions, { dayId: day.id, exerciseId: card.exerciseId, equipmentId: equipment.id }));
+
   return `
       <p class="last${last ? '' : ' empty'}">${last
         ? `Geçen sefer — ${formatDate(last.date)}: ${escapeHtml(formatSets(last.sets, last.unit))}`
         : 'Bu makinede önceki kayıt yok'}</p>
+      ${counter ? `<p class="counter">${counter}</p>` : ''}
+      <p class="progress-live" aria-live="polite">${cardLiveText(card, equipment, last)}</p>
 
       ${unit === 'none' ? '' : `
         <div class="field weight">
@@ -81,6 +91,26 @@ function logHtml(card, index, equipment, day, sessions) {
           <button type="button" class="button small" data-action="remove-set"${card.reps.length <= 1 ? ' disabled' : ''}>− Set</button>
         </div>
       </fieldset>`;
+}
+
+// Set girilirken görünen anlık ilerleme durumu (kutulardaki geçerli değerlere göre).
+export function cardLiveText(card, equipment, last) {
+  const { sets } = collectSets({ weight: card.weight, reps: card.reps }, equipment.unit);
+  return liveProgressText(last?.sets ?? null, sets, equipment.unit);
+}
+
+// Düzenleme modunda makineler: her birinin yanında "Sil".
+function machineListHtml(machines, busy) {
+  return `
+    <ul class="machine-list">
+      ${machines.map((option) => `
+        <li>
+          <span>${escapeHtml(option.name)} · ${UNIT_LABELS[option.unit]}</span>
+          <button type="button" class="button small danger" data-action="delete-machine" data-equipment="${escapeHtml(option.id)}"
+            aria-label="${escapeHtml(option.name)} makinesini sil"${busy ? ' disabled' : ''}>Sil</button>
+        </li>`).join('')}
+    </ul>
+    <button type="button" class="button small" data-action="done-editing">Bitti</button>`;
 }
 
 // Kartın bir kutusu işaretli mi: ağırlık sorunu ağırlık kutusunu, geçersiz tekrar kendi kutusunu,

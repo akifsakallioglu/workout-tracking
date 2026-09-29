@@ -68,7 +68,7 @@ Her yeni sürümde:
 
 ## Simgeler
 
-`icons/icon.svg` ve `icons/icon-maskable.svg` değişirse PNG'leri yeniden üretin:
+Simgelerin kaynağı `icons/icon-source.png` (kare, zemini kenarlara kadar dolu, çizim ortadaki %80'lik alanda). Kaynak değişirse diğer boyutları yeniden üretin:
 
 ```
 .venv\Scripts\python tools\render_icons.py

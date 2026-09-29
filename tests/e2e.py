@@ -254,7 +254,7 @@ def infrastructure_steps(run):
         listed = set(re.findall(r"^\s+'([^']+)',$", text, re.MULTILINE))
         app_files = [*ROOT.glob("css/*.css"), *ROOT.glob("js/**/*.js"), *ROOT.glob("icons/*")]
         expected = {"./", "index.html", "manifest.webmanifest"} | {path.relative_to(ROOT).as_posix() for path in app_files}
-        expected -= {"icons/icon-maskable.svg"}  # yalnızca PNG üretmek için kaynak
+        expected -= {"icons/icon-source.png"}  # yalnızca simgeleri üretmek için kaynak
         assert listed == expected, f"sw.js listesi eksik ya da fazla: eksik {expected - listed}, fazla {listed - expected}"
         for file in listed - {"./"}:
             assert urllib.request.urlopen(f"{run.base_url}/{file}").status == 200, file
@@ -845,6 +845,153 @@ def backup_steps(run):
     ]
 
 
+# ---------------------------------------------------------------- Makine silme ve ilerleme sayacı
+
+def counter_line(scope):
+    return scope.locator(".counter")
+
+
+def live_progress(scope):
+    return scope.locator(".progress-live")
+
+
+def delete_machine(page, scope, name, accept):
+    messages = []
+
+    def answer(dialog):
+        messages.append(dialog.message)
+        dialog.accept() if accept else dialog.dismiss()
+
+    page.once("dialog", answer)
+    scope.get_by_role("button", name=f"{name} makinesini sil").click()
+    return messages
+
+
+def machines_and_counter_steps(run):
+    state = {}
+
+    def delete_unused_machine(page):
+        page.goto(run.base_url + "/")
+        state["today"] = today(page)
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        add_machine(rope, "Kablo 2", "kademe")
+        expect(radio(rope, "Kablo 2 · kademe")).to_be_checked()
+        rope.get_by_role("button", name="Düzenle").click()
+        expect(rope.locator(".machine-list li")).to_have_count(2)
+        messages = delete_machine(page, rope, "Kablo 2", accept=False)
+        assert messages == ['"Kablo 2" makinesi silinsin mi?'], messages
+        expect(rope.locator(".machine-list li")).to_have_count(2)
+        delete_machine(page, rope, "Kablo 2", accept=True)
+        expect(save_status(page)).to_have_text("Makine silindi ✓")
+        expect(rope.locator(".machine-list li")).to_have_count(1)
+        page.screenshot(path=str(ARTIFACTS / "asama6-makine-duzenle.png"))
+        rope.get_by_role("button", name="Bitti").click()
+        assert machine_names(rope) == ["Kablo · kg"], machine_names(rope)
+        expect(radio(rope, "Kablo · kg")).to_be_checked()
+        saved = stored_program(page)["exercises"]["rope-pushdown"]["equipment"]
+        assert [equipment["name"] for equipment in saved] == ["Kablo"], "Kaydı olmayan makine tamamen silinmeli"
+
+    def delete_used_machine(page):
+        chest = card(page, "Machine Chest Press")
+        add_machine(chest, "Göğüs Pres", "kg")
+        log_sets(chest, "40", ["12"])
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        open_day(page, "push", "Push")
+        chest = card(page, "Machine Chest Press")
+        chest.get_by_role("button", name="Düzenle").click()
+        messages = delete_machine(page, chest, "Göğüs Pres", accept=True)
+        assert messages and "1 kayıtlı antrenman var; o kayıtlar silinmez." in messages[0], messages
+        expect(chest.locator(".no-machine")).to_have_count(1)
+        saved = stored_program(page)["exercises"]["machine-chest-press"]["equipment"]
+        assert len(saved) == 1 and saved[0]["archived"] is True, saved
+        assert len(sessions(page)) == 1, "Kayıtlar silinmemeli"
+        add_machine(chest, "Göğüs Pres", "kg")  # silinen makinenin adı yeniden kullanılabilir
+        expect(radio(chest, "Göğüs Pres · kg")).to_be_checked()
+        expect(last_time(chest)).to_have_text("Bu makinede önceki kayıt yok")
+        go_home(page)
+
+    def counter_from_existing_records(page):
+        kablo = next(e for e in stored_program(page)["exercises"]["rope-pushdown"]["equipment"] if e["name"] == "Kablo")
+        state["kablo"] = kablo["id"]
+
+        def record(record_id, days_ago, weight, reps_list):
+            return {
+                "id": record_id,
+                "dayId": "push",
+                "dayName": "Push",
+                "startedAt": iso_days_ago(days_ago),
+                "finishedAt": iso_days_ago(days_ago),
+                "entries": [{
+                    "exerciseId": "rope-pushdown",
+                    "equipmentId": kablo["id"],
+                    "name": "Rope Pushdown",
+                    "equipmentName": "Kablo",
+                    "unit": "kg",
+                    "options": ["rope-pushdown"],
+                    "target": {"sets": 3, "repMin": 12, "repMax": 15},
+                    "sets": [{"weight": weight, "reps": count} for count in reps_list],
+                }],
+            }
+
+        page.evaluate(PUT_SCRIPT, ["sessions", record("gecmis-1", 14, 40, [12, 11, 10])])
+        page.evaluate(PUT_SCRIPT, ["sessions", record("gecmis-2", 7, 40, [12, 11, 10])])
+        page.reload()
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        expect(radio(rope, "Kablo · kg")).to_be_checked()
+        expect(last_time(rope)).to_contain_text("40 kg × 12 · 11 · 10")
+        expect(counter_line(rope)).to_have_text("İlk kayıttan beri 1 antrenman")
+        expect(live_progress(rope)).to_be_hidden()
+
+    def live_progress_and_reset(page):
+        rope = card(page, "Rope Pushdown")
+        log_sets(rope, "40", ["12", "12", "10"])
+        expect(live_progress(rope)).to_have_text("Bu antrenmanda ilerledin ✓")
+        page.screenshot(path=str(ARTIFACTS / "asama6-ilerleme.png"))
+        reps(rope, 2).fill("11")
+        expect(live_progress(rope)).to_be_hidden()
+        reps(rope, 2).fill("12")
+        expect(live_progress(rope)).to_have_text("Bu antrenmanda ilerledin ✓")
+        finish(page)
+        open_day(page, "push", "Push")
+        expect(counter_line(card(page, "Rope Pushdown"))).to_have_text("Geçen antrenmanda ilerledin")
+
+    def no_progress_increments(page):
+        rope = card(page, "Rope Pushdown")
+        log_sets(rope, "40", ["12", "12", "10"])
+        expect(live_progress(rope)).to_be_hidden()
+        finish(page)
+        open_day(page, "push", "Push")
+        expect(counter_line(card(page, "Rope Pushdown"))).to_have_text("Son ilerlemeden beri 1 antrenman")
+
+    def other_machine_keeps_counter(page):
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo 3", "kg")
+        log_sets(rope, "30", ["15"])
+        expect(live_progress(rope)).to_have_text("İlk kayıt: başlangıç noktası")
+        finish(page)
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        expect(radio(rope, "Kablo 3 · kg")).to_be_checked()
+        expect(counter_line(rope)).to_have_count(0)
+        radio(rope, "Kablo · kg").check()
+        expect(counter_line(rope)).to_have_text("Son ilerlemeden beri 1 antrenman")
+        page.screenshot(path=str(ARTIFACTS / "asama6-sayac.png"))
+        go_home(page)
+
+    return [
+        ("Kaydı olmayan makine onayla tamamen siliniyor; 'Vazgeç' silmiyor", delete_unused_machine),
+        ("Kaydı olan makine listeden kalkıyor, kayıtlar duruyor; aynı ad yeniden eklenebiliyor", delete_used_machine),
+        ("Mevcut kayıtlardan sayaç: 'İlk kayıttan beri 1 antrenman'", counter_from_existing_records),
+        ("Set girerken 'Bu antrenmanda ilerledin ✓'; sonra 'Geçen antrenmanda ilerledin'", live_progress_and_reset),
+        ("İlerleme olmayan antrenmandan sonra 'Son ilerlemeden beri 1 antrenman'", no_progress_increments),
+        ("Başka makine kullanılınca ilk makinenin sayacı değişmiyor", other_machine_keeps_counter),
+    ]
+
+
 # ---------------------------------------------------------------- İnternetsiz çalışma ve güncelleme
 
 WAIT_FOR_CONTROLLER = "navigator.serviceWorker.controller !== null"
@@ -1203,6 +1350,7 @@ def main():
             run.flow("Push antrenmanı", push_workout_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Otomatik kaydetme ve devam eden antrenman", autosave_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Yedekleme", backup_steps(run), init_script=FAIL_WRITES_SCRIPT)
+            run.flow("Makine silme ve ilerleme sayacı", machines_and_counter_steps(run))
             run.flow("İnternetsiz çalışma", offline_steps(run))
             run.flow("Yeni sürüm ve güncelleme", update_steps(copy_url, app_copy), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))

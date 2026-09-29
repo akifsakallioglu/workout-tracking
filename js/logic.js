@@ -235,6 +235,79 @@ export function withEquipment(program, exerciseId, equipment) {
   };
 }
 
+// Makineyi siler: kaydı olmayan makine listeden tamamen kalkar; kaydı olan makine, eski kayıtlar
+// bozulmasın diye arşivlenir (seçim listesinden kalkar). Programın kopyasını döndürür.
+export function withoutEquipment(program, exerciseId, equipmentId, used) {
+  const exercise = program.exercises[exerciseId];
+  const equipment = used.has(equipmentId)
+    ? exercise.equipment.map((option) => (option.id === equipmentId ? { ...option, archived: true } : option))
+    : exercise.equipment.filter((option) => option.id !== equipmentId);
+  return { ...program, exercises: { ...program.exercises, [exerciseId]: { ...exercise, equipment } } };
+}
+
+// Makinenin kullanıldığı bitmiş antrenman sayısı.
+export function equipmentUseCount(sessions, equipmentId) {
+  return sessions.filter(
+    (session) => session.finishedAt && session.entries.some((entry) => entry.equipmentId === equipmentId && entry.sets.length),
+  ).length;
+}
+
+// ---------------------------------------------------------------- İlerleme
+
+// Bugünkü setler bir önceki kayıtla set set karşılaştırılır (1. set 1. setle...); yalnızca ikisinde
+// de bulunan setlere bakılır. Ağırlığı (kademesi) daha yüksek ya da ağırlığı aynı ve tekrarı daha
+// yüksek bir set varsa ilerleme vardır. Ağırlıksız makinede yalnızca tekrara bakılır.
+export function hasProgress(previousSets, currentSets, unit) {
+  const count = Math.min(previousSets.length, currentSets.length);
+  for (let index = 0; index < count; index++) {
+    const before = previousSets[index];
+    const now = currentSets[index];
+    if (unit === 'none' || now.weight === before.weight) {
+      if (now.reps > before.reps) return true;
+    } else if (now.weight > before.weight) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Aynı gün + hareket + makinede son ilerlemeden sonra gelen bitmiş antrenman sayısı. Hiç ilerleme
+// yoksa ilk kayıt başlangıç noktasıdır (sinceFirst). Kayıt yoksa null. Seti girilmemiş (atlanmış)
+// hareket ve bitmemiş antrenman sayılmaz; başka makine ya da gün sayacı etkilemez.
+export function progressCounter(sessions, { dayId, exerciseId, equipmentId }) {
+  const entries = sessions
+    .filter((session) => session.finishedAt && session.dayId === dayId)
+    .map((session) => ({
+      startedAt: session.startedAt,
+      entry: session.entries.find(
+        (candidate) => candidate.exerciseId === exerciseId && candidate.equipmentId === equipmentId && candidate.sets.length > 0,
+      ),
+    }))
+    .filter(({ entry }) => entry)
+    .sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1))
+    .map(({ entry }) => entry);
+  if (!entries.length) return null;
+  let lastProgress = 0;
+  for (let index = 1; index < entries.length; index++) {
+    if (hasProgress(entries[index - 1].sets, entries[index].sets, entries[index].unit)) lastProgress = index;
+  }
+  return { count: entries.length - 1 - lastProgress, sinceFirst: lastProgress === 0 };
+}
+
+// Kartta "Geçen sefer" satırının altındaki sayaç metni; gösterilecek bir şey yoksa boş metin.
+export function counterText(counter) {
+  if (!counter) return '';
+  if (counter.sinceFirst) return counter.count ? `İlk kayıttan beri ${counter.count} antrenman` : '';
+  return counter.count ? `Son ilerlemeden beri ${counter.count} antrenman` : 'Geçen antrenmanda ilerledin';
+}
+
+// Set girilirken görünen anlık durum: bir önceki kayda göre artış varsa ya da ilk kayıtsa.
+export function liveProgressText(previousSets, currentSets, unit) {
+  if (!currentSets.length) return '';
+  if (!previousSets) return 'İlk kayıt: başlangıç noktası';
+  return hasProgress(previousSets, currentSets, unit) ? 'Bu antrenmanda ilerledin ✓' : '';
+}
+
 export function formatWeight(value) {
   return numberFormat.format(value);
 }

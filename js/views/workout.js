@@ -6,9 +6,13 @@ import {
   buildSession,
   defaultEquipmentId,
   equipmentError,
+  equipmentUseCount,
   evaluateCards,
   formatDateTime,
+  lastPerformance,
+  usedEquipmentIds,
   withEquipment,
+  withoutEquipment,
 } from '../logic.js';
 import {
   createId,
@@ -22,7 +26,7 @@ import {
   saveSession,
 } from '../store.js';
 import { errorReason, escapeHtml } from '../ui.js';
-import { cardHtml, isInvalid } from './exercise-card.js';
+import { cardHtml, cardLiveText, isInvalid } from './exercise-card.js';
 
 // Yazmayı bırakınca kaydetmeden önce beklenen süre.
 const SAVE_DELAY = 500;
@@ -53,6 +57,12 @@ const STATUS_TEXT = {
     error: 'Makine eklenemedi.',
     keep: 'girdiğiniz ad ve birim formda duruyor.',
   },
+  machineDelete: {
+    saving: 'Makine siliniyor…',
+    saved: 'Makine silindi ✓',
+    error: 'Makine silinemedi.',
+    keep: 'makine listede duruyor.',
+  },
 };
 
 export async function renderWorkout(container, { dayId, navigate }) {
@@ -78,6 +88,7 @@ export async function renderWorkout(container, { dayId, navigate }) {
       problems: [],
       message: '',
       machineForm: null, // { name, unit, error }: açıkken yeni makine formu görünür
+      editingMachines: false, // açıkken makineler "Sil" düğmeleriyle listelenir
     };
   };
   // Devam eden antrenmanın taslağından kart; hedef, antrenman başlarken kopyalanan hâlidir.
@@ -143,9 +154,12 @@ export async function renderWorkout(container, { dayId, navigate }) {
     container.querySelector(`[data-card="${index}"]`).outerHTML = cardHtml(state.cards[index], index, cardContext());
   }
 
-  // Makine adı önerileri: bütün hareketlerde kullanılan makine adları.
+  // Makine adı önerileri: bütün hareketlerde kullanılan (silinmemiş) makine adları.
   function machineNameOptions() {
-    const names = new Set(Object.values(state.program.exercises).flatMap((exercise) => exercise.equipment.map((equipment) => equipment.name)));
+    const names = new Set(
+      Object.values(state.program.exercises).flatMap((exercise) =>
+        exercise.equipment.filter((equipment) => !equipment.archived).map((equipment) => equipment.name)),
+    );
     return [...names]
       .sort((a, b) => a.localeCompare(b, 'tr'))
       .map((name) => `<option value="${escapeHtml(name)}"></option>`)
@@ -341,6 +355,45 @@ export async function renderWorkout(container, { dayId, navigate }) {
     }
   }
 
+  // Silmeden önce onay alınır. Kaydı olmayan makine tamamen silinir; kaydı olan makine arşivlenir:
+  // listeden kalkar, eski kayıtlar bozulmaz.
+  async function deleteMachine(index, equipmentId, confirmed = false) {
+    const card = state.cards[index];
+    const equipment = exerciseOf(card).equipment.find((option) => option.id === equipmentId);
+    if (state.busy || !equipment) return;
+    if (!confirmed) {
+      const uses = equipmentUseCount(state.sessions, equipmentId);
+      const question = uses
+        ? `"${equipment.name}" makinesi silinsin mi? Bu makinede ${uses} kayıtlı antrenman var; o kayıtlar silinmez.`
+        : `"${equipment.name}" makinesi silinsin mi?`;
+      if (!confirm(question)) return;
+    }
+
+    const next = withoutEquipment(state.program, card.exerciseId, equipmentId, usedEquipmentIds(state.sessions));
+    state.writeContext = 'machineDelete';
+    state.busy = true;
+    renderCard(index);
+    try {
+      await saveProgram(next);
+      state.program = next;
+      // Silinen makine seçili olan kartlarda başka bir makine (ya da hiçbiri) seçilir.
+      for (const other of state.cards) {
+        if (other.exerciseId === card.exerciseId && other.equipmentId === equipmentId) {
+          other.equipmentId = defaultEquipmentId(state.sessions, day.id, other.exerciseId, exerciseOf(other));
+        }
+      }
+      if (!exerciseOf(card).equipment.some((option) => !option.archived)) card.editingMachines = false;
+      state.retry = null;
+      requestSave(true, 'machineDelete');
+    } catch (error) {
+      console.warn('Makine silinemedi', error);
+      state.retry = () => deleteMachine(index, equipmentId, true);
+    } finally {
+      state.busy = false;
+      render();
+    }
+  }
+
   // Düzeltilen kutuların işareti kalkar; kalan sorunların işaretleri durur.
   function syncInvalidMarks(cardElement, card) {
     for (const input of cardElement.querySelectorAll('input[data-field]')) {
@@ -386,6 +439,12 @@ export async function renderWorkout(container, { dayId, navigate }) {
     if (state.message) {
       state.message = '';
       container.querySelector('#workout-message').textContent = '';
+    }
+    const equipment = equipmentOf(card);
+    const live = cardElement.querySelector('.progress-live');
+    if (equipment && live) {
+      const key = { dayId: day.id, exerciseId: card.exerciseId, equipmentId: equipment.id };
+      live.textContent = cardLiveText(card, equipment, lastPerformance(state.sessions, key));
     }
     requestSave();
   });
@@ -446,6 +505,18 @@ export async function renderWorkout(container, { dayId, navigate }) {
       case 'close-machine-form':
         card.machineForm = null;
         renderCard(index);
+        break;
+      case 'edit-machines':
+        card.editingMachines = true;
+        card.machineForm = null;
+        renderCard(index);
+        break;
+      case 'done-editing':
+        card.editingMachines = false;
+        renderCard(index);
+        break;
+      case 'delete-machine':
+        deleteMachine(index, actionElement.dataset.equipment);
         break;
       case 'add-set':
         card.reps.push('');
