@@ -12,6 +12,8 @@ import {
   lastPerformance,
   liveProgressText,
   progressCounter,
+  suggestOption,
+  suggestionText,
 } from '../logic.js';
 import { escapeHtml } from '../ui.js';
 
@@ -34,6 +36,7 @@ export function cardHtml(card, index, { day, program, sessions, busy }) {
             ${card.item.options.map((exerciseId) =>
               radioChip(`option-${index}`, exerciseId, program.exercises[exerciseId].name, exerciseId === card.exerciseId)).join('')}
           </div>
+          <p class="suggestion">${escapeHtml(suggestionText(suggestOption(sessions, day.id, card.item.options), program.exercises))}</p>
         </fieldset>` : ''}
 
       <fieldset class="machines">

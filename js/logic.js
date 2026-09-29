@@ -134,6 +134,29 @@ export function lastDoneDate(sessions, dayId) {
   return latest;
 }
 
+// Dönüşümlü satırda öneri: aynı günün bitmiş antrenmanlarında bu satırın hareketlerinden en son
+// yapılanın (seti girilmiş) bir sonrakisi; liste bitince başa döner, hiç kayıt yoksa ilk hareket.
+// Atlanan hareket "yapıldı" sayılmadığı için sırayı ilerletmez; öneri elle değiştirildiyse gerçekte
+// yapılan hareket esas alınır. Sonuç: { exerciseId, last: { exerciseId, date } | null }
+export function suggestOption(sessions, dayId, options) {
+  let last = null;
+  for (const session of sessions) {
+    if (!session.finishedAt || session.dayId !== dayId) continue;
+    const entry = session.entries.find((candidate) => options.includes(candidate.exerciseId) && candidate.sets.length > 0);
+    if (entry && (!last || session.startedAt > last.date)) last = { exerciseId: entry.exerciseId, date: session.startedAt };
+  }
+  const exerciseId = last ? options[(options.indexOf(last.exerciseId) + 1) % options.length] : options[0];
+  return { exerciseId, last };
+}
+
+// "Son yapılan: Wrist Curl · 22 Eyl · Sıradaki: Reverse Curl"; hiç kayıt yoksa
+// "Henüz kayıt yok · Sıradaki: Wrist Curl"
+export function suggestionText({ exerciseId, last }, exercises, now = new Date()) {
+  const next = `Sıradaki: ${exercises[exerciseId].name}`;
+  if (!last) return `Henüz kayıt yok · ${next}`;
+  return `Son yapılan: ${exercises[last.exerciseId].name} · ${formatDate(last.date, now)} · ${next}`;
+}
+
 // Dönüşümlü satırın başlığı: "Wrist Curl / Reverse Curl"
 export function itemTitle(item, exercises) {
   return item.options.map((exerciseId) => exercises[exerciseId].name).join(' / ');

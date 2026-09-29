@@ -10,6 +10,7 @@ import {
   evaluateCards,
   formatDateTime,
   lastPerformance,
+  suggestOption,
   usedEquipmentIds,
   withEquipment,
   withoutEquipment,
@@ -78,7 +79,8 @@ export async function renderWorkout(container, { dayId, navigate }) {
   const available = (exercise, equipmentId) =>
     exercise.equipment.some((equipment) => equipment.id === equipmentId && !equipment.archived);
   const newCard = (item) => {
-    const exerciseId = item.options[0];
+    // Dönüşümlü satırda önerilen hareket seçili gelir; tek hareketli satırda o hareket.
+    const { exerciseId } = suggestOption(sessions, day.id, item.options);
     return {
       item,
       exerciseId,

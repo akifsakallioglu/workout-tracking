@@ -17,6 +17,7 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Antrenman başlarken hareket adı, makine adı, birim ve hedef kayda kopyalanır. Program değişince eski kayıtlar değişmez.
 - Ağırlık hareket başına bir kez girilir ve tekrarı girilen her sete uygulanır; kayıtta her set bu ağırlığı taşır. Ağırlıksız makinede yalnızca tekrar girilir. Tekrar girilip ağırlık girilmezse ya da yalnızca ağırlık girilirse uyarı verir; boş tekrar kutusu kaydedilmez. Önceki değerler yalnızca ipucudur, kutuları doldurmaz.
 - Varsayılan makine: o gün o harekette en son kullanılan makine; yoksa listedeki ilk makine.
+- Dönüşümlü satır: aynı günün bitmiş antrenmanlarında bu satırdan en son yapılan (seti girilmiş) hareketin bir sonrakisi önerilir ve seçili gelir; liste bitince başa döner, kayıt yoksa ilk hareket. Atlanan hareket sırayı ilerletmez; elle değiştirilirse gerçekte yapılan esas alınır. Kartta "Son yapılan: … · tarih · Sıradaki: …".
 - Seti girilmemiş hareket "atlandı" sayılır ve kayda yazılmaz. Bitmemiş antrenmanlar hesaplara katılmaz.
 - "Geçen sefer", ilerleme sayacı, dönüşüm önerisi ve grafikler kayıtlardan hesaplanır; veritabanına yazılmaz.
 - İlerleme: bugünkü setler aynı anahtardaki bir önceki kayıtla set set karşılaştırılır; ağırlığı (kademesi) yüksek ya da ağırlığı aynı ve tekrarı yüksek bir set varsa ilerlemedir. Sayaç: son ilerlemeden sonraki bitmiş antrenman sayısı (hiç ilerleme yoksa ilk kayıttan). Kartta "Son ilerlemeden beri N antrenman" / "İlk kayıttan beri N antrenman" / "Geçen antrenmanda ilerledin"; set girerken "Bu antrenmanda ilerledin ✓".
@@ -58,4 +59,4 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Yeni kararlar bu dosyaya işlenir.
 
 ## Aşamalar
-0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma ✓ (telefonda uçak modu denemesi kullanıcıda) · 6 İlerleme sayacı ✓ (makine silme ve yeni simge de) · 7 Dönüşümlü hareket önerisi · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi
+0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma ✓ (telefonda uçak modu denemesi kullanıcıda) · 6 İlerleme sayacı ✓ (makine silme ve yeni simge de) · 7 Dönüşümlü hareket önerisi ✓ · 8 Geçmiş ve düzeltme · 9 Grafikler · 10 Program düzenleyici ve makine yönetimi

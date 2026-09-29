@@ -283,6 +283,7 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
   - Aşama 5'ten beri girilen gerçek kayıtlarda da sayaç görünüyor.
 
 **Aşama 7: Dönüşümlü hareket önerisi**
+- Önerilen hareket kartta seçili gelir; hiç kayıt yokken "Henüz kayıt yok · Sıradaki: Wrist Curl" yazar. Devam eden antrenmana dönünce seçilmiş hareket korunur.
 - 5. bölümdeki kurallar saf fonksiyon olarak yazılır. *Bitti sayılır:* şu testler geçiyor:
   - Hiç kayıt yokken Wrist Curl önerilir.
   - Son Pull'da Wrist Curl yapıldıysa Reverse Curl önerilir.

@@ -577,6 +577,12 @@ a.button {
   margin-top: 16px;
 }
 
+.suggestion {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
 .set-buttons {
   display: flex;
   gap: 8px;

@@ -202,9 +202,12 @@ def machine_names(scope):
     return [text.strip() for text in scope.locator(".machines .chip:has(input)").all_text_contents()]
 
 
-def add_machine(scope, name, unit_label):
+def add_machine(scope, name, unit_label, wait=True):
     scope.get_by_role("button", name="+ Makine").click()
     submit_machine(scope, name, unit_label)
+    if wait:
+        # Kart makine kaydedildikten sonra yeniden çizilir; o bitmeden yazılan değer eski kutuya gider.
+        expect(radio(scope, f"{name} · {unit_label}")).to_be_checked()
 
 
 def submit_machine(scope, name, unit_label):
@@ -514,7 +517,7 @@ def push_workout_steps(run):
         open_day(page, "push", "Push")
         overhead = card(page, "Overhead Rope Extension")
         page.evaluate("window.__failWrites = true")
-        add_machine(overhead, "Kablo 4", "kg")
+        add_machine(overhead, "Kablo 4", "kg", wait=False)
         expect(save_status(page)).to_contain_text("Makine eklenemedi.")
         expect(overhead.get_by_label("Ad", exact=True)).to_have_value("Kablo 4")
         assert machine_names(overhead) == [], machine_names(overhead)
@@ -992,6 +995,80 @@ def machines_and_counter_steps(run):
     ]
 
 
+# ---------------------------------------------------------------- Dönüşümlü hareket önerisi
+
+def rotation_steps(run):
+    state = {}
+
+    def pull_card(page):
+        return card(page, "Wrist Curl / Reverse Curl")
+
+    def first_time(page):
+        page.goto(run.base_url + "/")
+        state["today"] = today(page)
+        open_day(page, "pull", "Pull")
+        wrist = pull_card(page)
+        expect(radio(wrist, "Wrist Curl")).to_be_checked()
+        expect(wrist.locator(".suggestion")).to_have_text("Henüz kayıt yok · Sıradaki: Wrist Curl")
+        add_machine(wrist, "Dambıl", "kg")
+        log_sets(wrist, "10", ["15", "15"])
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Pull antrenmanı kaydedildi ✓")
+
+    def suggests_next(page):
+        open_day(page, "pull", "Pull")
+        wrist = pull_card(page)
+        expect(radio(wrist, "Reverse Curl")).to_be_checked()
+        expect(wrist.locator(".suggestion")).to_have_text(f"Son yapılan: Wrist Curl · {state['today']} · Sıradaki: Reverse Curl")
+        wrist.screenshot(path=str(ARTIFACTS / "asama7-oneri.png"))
+        lat = card(page, "Lat Pulldown (wide grip)")
+        add_machine(lat, "Makine", "kg")
+        log_sets(lat, "40", ["10"])  # Reverse Curl atlanıyor
+        finish(page)
+
+    def skip_keeps_suggestion(page):
+        open_day(page, "pull", "Pull")
+        wrist = pull_card(page)
+        expect(radio(wrist, "Reverse Curl")).to_be_checked()
+        expect(wrist.locator(".suggestion")).to_contain_text("Son yapılan: Wrist Curl")
+
+    def manual_choice_counts(page):
+        wrist = pull_card(page)
+        radio(wrist, "Wrist Curl").check()
+        expect(radio(wrist, "Dambıl · kg")).to_be_checked()
+        log_sets(wrist, "10", ["15", "15"])
+        finish(page)
+        open_day(page, "pull", "Pull")
+        expect(radio(pull_card(page), "Reverse Curl")).to_be_checked()
+
+    def wraps_around(page):
+        wrist = pull_card(page)
+        add_machine(wrist, "Bar", "kg")
+        log_sets(wrist, "20", ["12", "12"])
+        finish(page)
+        open_day(page, "pull", "Pull")
+        wrist = pull_card(page)
+        expect(radio(wrist, "Wrist Curl")).to_be_checked()
+        expect(wrist.locator(".suggestion")).to_have_text(f"Son yapılan: Reverse Curl · {state['today']} · Sıradaki: Wrist Curl")
+        go_home(page)
+
+    def legs_group_independent(page):
+        open_day(page, "legs", "Legs")
+        chop = card(page, "Cable Chop / Reverse Cable Chop")
+        expect(radio(chop, "Cable Chop")).to_be_checked()
+        expect(chop.locator(".suggestion")).to_have_text("Henüz kayıt yok · Sıradaki: Cable Chop")
+        go_home(page)
+
+    return [
+        ("İlk açılışta Wrist Curl öneriliyor: 'Henüz kayıt yok · Sıradaki: Wrist Curl'", first_time),
+        ("Wrist Curl yapıldıktan sonra Reverse Curl öneriliyor ve seçili geliyor", suggests_next),
+        ("Reverse Curl atlanınca öneri değişmiyor", skip_keeps_suggestion),
+        ("Öneri elle değiştirilip Wrist Curl yapılınca sonraki öneri yine Reverse Curl", manual_choice_counts),
+        ("Reverse Curl yapılınca liste başa dönüyor: Wrist Curl", wraps_around),
+        ("Legs'teki Cable Chop grubu Pull'dan bağımsız", legs_group_independent),
+    ]
+
+
 # ---------------------------------------------------------------- İnternetsiz çalışma ve güncelleme
 
 WAIT_FOR_CONTROLLER = "navigator.serviceWorker.controller !== null"
@@ -1351,6 +1428,7 @@ def main():
             run.flow("Otomatik kaydetme ve devam eden antrenman", autosave_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Yedekleme", backup_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Makine silme ve ilerleme sayacı", machines_and_counter_steps(run))
+            run.flow("Dönüşümlü hareket önerisi", rotation_steps(run))
             run.flow("İnternetsiz çalışma", offline_steps(run))
             run.flow("Yeni sürüm ve güncelleme", update_steps(copy_url, app_copy), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))

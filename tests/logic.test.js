@@ -26,6 +26,8 @@ import {
   parseReps,
   parseWeight,
   progressCounter,
+  suggestOption,
+  suggestionText,
   upgradeProgram,
   usedEquipmentIds,
   validationMessage,
@@ -545,4 +547,52 @@ test('sayaç metni', () => {
   assertEqual(counterText({ count: 3, sinceFirst: true }), 'İlk kayıttan beri 3 antrenman');
   assertEqual(counterText({ count: 0, sinceFirst: false }), 'Geçen antrenmanda ilerledin');
   assertEqual(counterText({ count: 2, sinceFirst: false }), 'Son ilerlemeden beri 2 antrenman');
+});
+
+// ---------------------------------------------------------------- Dönüşümlü hareket önerisi
+
+const WRIST = ['wrist-curl', 'reverse-curl'];
+
+function pullSession(id, date, exerciseId, { finished = true, dayId = 'pull', sets: setList = [{ weight: 10, reps: 15 }] } = {}) {
+  return session({ id, date, dayId, exerciseId, equipmentId: `${exerciseId}-makine`, sets: setList, finished });
+}
+
+test('dönüşüm: hiç kayıt yokken ilk hareket, Wrist Curl yapıldıysa Reverse Curl önerilir', () => {
+  assertEqual(suggestOption([], 'pull', WRIST), { exerciseId: 'wrist-curl', last: null });
+  const done = [pullSession('1', '2026-09-22T12:00:00.000Z', 'wrist-curl')];
+  assertEqual(suggestOption(done, 'pull', WRIST), {
+    exerciseId: 'reverse-curl',
+    last: { exerciseId: 'wrist-curl', date: '2026-09-22T12:00:00.000Z' },
+  });
+  const both = [...done, pullSession('2', '2026-09-25T12:00:00.000Z', 'reverse-curl')];
+  assertEqual(suggestOption(both, 'pull', WRIST).exerciseId, 'wrist-curl', 'liste bitince başa döner');
+});
+
+test('dönüşüm: atlanan hareket sırayı değiştirmez; elle değiştirilince yapılan hareket esas alınır', () => {
+  const wristDone = pullSession('1', '2026-09-15T12:00:00.000Z', 'wrist-curl');
+  // Öneri Reverse Curl'dü ama hareket atlandı: o antrenmanda bu satırdan seti girilmiş hareket yok.
+  const skipped = session({ id: '2', date: '2026-09-22T12:00:00.000Z', dayId: 'pull', exerciseId: 'lat-pulldown-wide-grip' });
+  assertEqual(suggestOption([wristDone, skipped], 'pull', WRIST).exerciseId, 'reverse-curl');
+  // Öneri Reverse Curl'ken elle Wrist Curl seçilip yapıldı.
+  const manual = pullSession('3', '2026-09-29T12:00:00.000Z', 'wrist-curl');
+  assertEqual(suggestOption([wristDone, skipped, manual], 'pull', WRIST).exerciseId, 'reverse-curl');
+});
+
+test('dönüşüm: bitmemiş antrenman ve başka gün öneriyi değiştirmez', () => {
+  const wristDone = pullSession('1', '2026-09-15T12:00:00.000Z', 'wrist-curl');
+  const unfinished = pullSession('2', '2026-09-22T12:00:00.000Z', 'reverse-curl', { finished: false });
+  assertEqual(suggestOption([wristDone, unfinished], 'pull', WRIST).exerciseId, 'reverse-curl');
+  const chop = ['cable-chop', 'reverse-cable-chop'];
+  const pullOnly = [wristDone, pullSession('3', '2026-09-25T12:00:00.000Z', 'cable-chop')];
+  assertEqual(suggestOption(pullOnly, 'legs', chop), { exerciseId: 'cable-chop', last: null }, 'Legs grubu Pull kayıtlarından bağımsız');
+});
+
+test('öneri metni', () => {
+  const exercises = { 'wrist-curl': { name: 'Wrist Curl' }, 'reverse-curl': { name: 'Reverse Curl' } };
+  const now = new Date('2026-09-29T12:00:00.000Z');
+  assertEqual(suggestionText({ exerciseId: 'wrist-curl', last: null }, exercises, now), 'Henüz kayıt yok · Sıradaki: Wrist Curl');
+  assertEqual(
+    suggestionText({ exerciseId: 'reverse-curl', last: { exerciseId: 'wrist-curl', date: '2026-09-22T12:00:00.000Z' } }, exercises, now),
+    'Son yapılan: Wrist Curl · 22 Eyl · Sıradaki: Reverse Curl',
+  );
 });
