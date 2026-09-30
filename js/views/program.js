@@ -36,7 +36,7 @@ export async function renderProgram(container, { navigate, flash }) {
     const { program, busy } = state;
     container.innerHTML = `
       <header class="page-head">
-        <a class="back" href="#/">← Ana Sayfa</a>
+        <a class="back" href="#/" data-nav="up">← Ana Sayfa</a>
         <h1>Program</h1>
         <p class="muted">Günlerin sırası "Sıradaki" gününün sırasıdır.</p>
       </header>
@@ -143,7 +143,7 @@ export async function renderProgram(container, { navigate, flash }) {
 export async function renderDayEditor(container, { dayId, navigate, flash }) {
   const [loaded, sessions] = await Promise.all([loadProgram(), loadSessions()]);
   if (!loaded.days.some((day) => day.id === dayId)) {
-    navigate('#/program');
+    navigate('#/program', '', 'replace');
     return {};
   }
   const active = activeSession(sessions);
@@ -155,7 +155,7 @@ export async function renderDayEditor(container, { dayId, navigate, flash }) {
     const day = currentDay();
     container.innerHTML = `
       <header class="page-head">
-        <a class="back" href="#/program">← Program</a>
+        <a class="back" href="#/program" data-nav="up">← Program</a>
         <h1>${escapeHtml(day.name)}</h1>
       </header>
       ${state.flash ? `<p id="flash" class="flash" role="status">${escapeHtml(state.flash)}</p>` : ''}
@@ -222,7 +222,7 @@ export async function renderDayEditor(container, { dayId, navigate, flash }) {
       else if (active?.dayId === dayId) state.message = 'Bu günün devam eden antrenmanı var. Önce antrenmanı bitirin ya da silin.';
       else if (confirm(`"${day.name}" günü silinsin mi? Bu günün geçmiş kayıtları silinmez.`)) {
         if (await save(withoutDay(state.program, dayId))) {
-          navigate('#/program', `"${day.name}" günü silindi.`);
+          navigate('#/program', `"${day.name}" günü silindi.`, 'up');
           return;
         }
       } else return;
@@ -251,7 +251,7 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
   const day = program.days.find((candidate) => candidate.id === dayId);
   const existing = day?.items.find((item) => item.id === itemId);
   if (!day || (itemId !== 'yeni' && !existing)) {
-    navigate(day ? `#/program/${dayId}` : '#/program');
+    navigate(day ? `#/program/${dayId}` : '#/program', '', 'replace');
     return {};
   }
   const state = {
@@ -277,7 +277,7 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
     const { form, busy } = state;
     container.innerHTML = `
       <header class="page-head">
-        <a class="back" href="#/program/${escapeHtml(dayId)}">← ${escapeHtml(day.name)}</a>
+        <a class="back" href="#/program/${escapeHtml(dayId)}" data-nav="up">← ${escapeHtml(day.name)}</a>
         <h1>${existing ? 'Satırı düzenle' : 'Yeni satır'}</h1>
       </header>
       <form class="card program-form" data-form="item" novalidate>
@@ -296,7 +296,7 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
         <p id="item-notice" class="status-message" role="status">${escapeHtml(state.notice)}</p>
         <div class="actions">
           <button type="submit" class="button primary"${busy ? ' disabled' : ''}>Kaydet</button>
-          <a class="button secondary" href="#/program/${escapeHtml(dayId)}">Vazgeç</a>
+          <a class="button secondary" href="#/program/${escapeHtml(dayId)}" data-nav="up">Vazgeç</a>
         </div>
       </form>
       ${existing ? `
@@ -471,7 +471,7 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
     try {
       await saveProgram(next);
       state.saved = true;
-      navigate(`#/program/${dayId}`, message);
+      navigate(`#/program/${dayId}`, message, 'up');
     } catch (error) {
       console.warn('Program kaydedilemedi', error);
       state.error = failed(error);

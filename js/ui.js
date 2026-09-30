@@ -20,7 +20,8 @@ const TABS = [
 // Ana ekranların başı: uygulama adı ve sekmeler. current, çizilen ekranın rotasıdır; adres metni
 // kullanılmaz, çünkü ana sayfa boş ve bilinmeyen adreslerde de açılır. Açık ekranın sekmesi
 // aria-current="page" taşır ve görünüşü de bu öznitelikten gelir. Sekmeler bağlantıdır: ekran
-// değişirken beforeLeave yine çalışır. Ana Sayfa'da uygulama adı sayfanın başlığıdır (h1).
+// değişirken beforeLeave yine çalışır; data-nav="tab" ile sekme değişimi geçmişe kayıt eklemez
+// (main.js, navigate). Ana Sayfa'da uygulama adı sayfanın başlığıdır (h1).
 export function appHeader(current) {
   const tag = current === '#/' ? 'h1' : 'p';
   return `
@@ -28,7 +29,7 @@ export function appHeader(current) {
       <${tag} class="app-title">Antrenman Takibi</${tag}>
       <nav class="tabs" aria-label="Ana gezinme">
         ${TABS.map(([href, label]) =>
-          `<a class="tab" href="${href}"${href === current ? ' aria-current="page"' : ''}>${label}</a>`).join('')}
+          `<a class="tab" href="${href}" data-nav="tab"${href === current ? ' aria-current="page"' : ''}>${label}</a>`).join('')}
       </nav>
     </header>`;
 }

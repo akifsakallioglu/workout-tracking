@@ -108,9 +108,9 @@ class Runner:
         self.failed = []
         self.skipped = 0
 
-    def flow(self, title, steps, init_script=None):
+    def flow(self, title, steps, init_script=None, **context_options):
         print(f"\n{title}")
-        context = self.browser.new_context(viewport=PHONE, locale="tr-TR", color_scheme="light")
+        context = self.browser.new_context(viewport=PHONE, locale="tr-TR", color_scheme="light", **context_options)
         if init_script:
             context.add_init_script(init_script)
         page = context.new_page()
@@ -2417,6 +2417,106 @@ def design_steps(run):
     ]
 
 
+# ---------------------------------------------------------------- Uygulama gibi geçmiş ve kaydırma
+
+def history_length(page):
+    return page.evaluate("history.length")
+
+
+def history_and_swipe_steps(run):
+    def tabs_keep_history_short(page):
+        page.goto(run.base_url + "/")
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+        start = history_length(page)
+        for tab in ["Geçmiş", "İlerleme", "Ayarlar", "Geçmiş", "İlerleme", "Ayarlar"]:
+            page.get_by_role("link", name=tab, exact=True).click()
+            expect(current_tab(page)).to_have_text(tab)
+        assert history_length(page) == start + 1, f"{start} → {history_length(page)}"  # yalnızca Ana Sayfa'dan ilk geçiş
+        page.go_back()  # telefonun geri hareketi: sekmedeyken Ana Sayfa'ya döner
+        expect(current_tab(page)).to_have_text("Ana Sayfa")
+        page.get_by_role("link", name="İlerleme", exact=True).click()
+        page.get_by_role("link", name="Ana Sayfa", exact=True).click()  # Ana Sayfa sekmesi geri gider
+        expect(current_tab(page)).to_have_text("Ana Sayfa")
+        assert history_length(page) == start + 1, f"{start} → {history_length(page)}"
+        return f"6 sekme değişiminden sonra {start + 1} kayıt"
+
+    def back_links_go_back(page):
+        open_program(page)
+        page.locator(".program-list .program-link").first.click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Push")
+        program_rows(page).first.click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Satırı düzenle")
+        deep = history_length(page)
+        page.get_by_role("link", name="← Push").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Push")
+        page.get_by_role("link", name="← Program").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Program")
+        page.get_by_role("link", name="← Ana Sayfa").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+        assert history_length(page) == deep, f"{deep} → {history_length(page)}"
+        page.go_forward()  # "←" gerçekten geri gitti: ileride Program duruyor
+        expect(page.get_by_role("heading", level=1)).to_have_text("Program")
+        page.get_by_role("link", name="← Ana Sayfa").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+
+    def finish_returns_back(page):
+        open_day(page, "push", "Push")
+        before = history_length(page)
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        log_sets(rope, "40", ["12"])
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        expect(current_tab(page)).to_have_text("Ana Sayfa")
+        assert history_length(page) == before, f"{before} → {history_length(page)}"
+
+    def swipe_switches_tabs(page):
+        cdp = page.context.new_cdp_session(page)
+
+        def swipe(x0, x1, y0=420, y1=None):  # Chrome'a gerçek parmak hareketi gönderilir
+            y1 = y0 if y1 is None else y1
+            points = [{"x": x0 + (x1 - x0) * step / 6, "y": y0 + (y1 - y0) * step / 6} for step in range(7)]
+            cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [points[0]]})
+            for point in points[1:]:
+                cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [point]})
+            cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+
+        def stays(tab):
+            page.wait_for_timeout(300)
+            expect(current_tab(page)).to_have_text(tab)
+
+        start = history_length(page)
+        for tab in ["Geçmiş", "İlerleme", "Ayarlar"]:
+            swipe(300, 100)  # parmak sola: sıradaki sekme
+            expect(current_tab(page)).to_have_text(tab)
+        swipe(300, 100)
+        stays("Ayarlar")  # sonda bir şey olmaz
+        swipe(100, 300)  # parmak sağa: önceki sekme
+        expect(current_tab(page)).to_have_text("İlerleme")
+        swipe(8, 250)
+        stays("İlerleme")  # ekranın kenarından başlayan kaydırma telefonundur
+        swipe(300, 200, 300, 500)
+        stays("İlerleme")  # çoğunlukla dikey: liste kaydırılıyor, sekme değişmez
+        for tab in ["Geçmiş", "Ana Sayfa"]:
+            swipe(100, 300)
+            expect(current_tab(page)).to_have_text(tab)
+        swipe(100, 300)
+        stays("Ana Sayfa")
+        assert history_length(page) <= start + 1, f"{start} → {history_length(page)}"
+        assert page.evaluate("getComputedStyle(document.documentElement).overscrollBehaviorX") == "none"
+        open_program(page)
+        swipe(300, 100)
+        page.wait_for_timeout(300)
+        expect(page.get_by_role("heading", level=1)).to_have_text("Program")  # alt ekranda kaydırma yok
+
+    return [
+        ("Sekmeler arasında gidip gelmek geçmişi büyütmüyor; sekmedeyken geri hareketi Ana Sayfa'ya dönüyor", tabs_keep_history_short),
+        ("\"←\" bağlantıları gerçekten geri gidiyor; geçmiş büyümüyor", back_links_go_back),
+        ("'Bitir' Ana Sayfa'ya geri dönüyor; geçmiş büyümüyor", finish_returns_back),
+        ("Parmakla kaydırma sekme değiştiriyor; kenardan, dikey ve alt ekranda değiştirmiyor", swipe_switches_tabs),
+    ]
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -2437,6 +2537,7 @@ def main():
             run.flow("Altyapı", infrastructure_steps(run))
             run.flow("Ana ekran ve program", program_steps(run))
             run.flow("Tasarım: sekmeler, ana sayfa, telefon ekranı", design_steps(run))
+            run.flow("Uygulama gibi geçmiş ve kaydırma", history_and_swipe_steps(run), has_touch=True)
             run.flow("Push antrenmanı", push_workout_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Otomatik kaydetme ve devam eden antrenman", autosave_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Yedekleme", backup_steps(run), init_script=FAIL_WRITES_SCRIPT)

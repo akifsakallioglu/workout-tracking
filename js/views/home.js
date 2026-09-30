@@ -21,7 +21,7 @@ export async function renderHome(container, { flash }) {
     ${reminder ? `
       <p id="backup-reminder" class="reminder">
         ${reminder.never ? 'Henüz yedek almadınız.' : `Son yedek ${reminder.days} gün önce alındı.`}
-        Verileriniz yalnızca bu cihazda duruyor. <a href="#/ayarlar">Yedek al</a>
+        Verileriniz yalnızca bu cihazda duruyor. <a href="#/ayarlar" data-nav="tab">Yedek al</a>
       </p>` : ''}
 
     ${active ? `

@@ -45,6 +45,7 @@
   --icon-md: 20px;
   --icon-lg: 24px;
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --duration-slide: 200ms; /* kaydırmayla açılan ekranın kayması */
 }
 
 * {
@@ -53,6 +54,9 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Chrome'un yatay kaydırmayla geri/ileri gitmesi kapalı: ana ekranlarda kaydırma sekme değiştirir.
+     Telefonun kendi kenar hareketi (iPhone'da geri/ileri, Android'de geri) sürer. */
+  overscroll-behavior-x: none;
 }
 
 body {
@@ -465,6 +469,36 @@ select[aria-invalid="true"] {
   height: 3px;
   border-radius: 3px;
   background: var(--accent);
+}
+
+/* Kaydırmayla açılan ana ekran, kaydırma yönünde kısa bir kaymayla gelir; "hareketi azalt" açıksa
+   gelmez. Kayarken sayfada yatay kaydırma çubuğu çıkmasın diye main o sırada yatayda kırpılır. */
+@media (prefers-reduced-motion: no-preference) {
+  main:has(> .slide-left, > .slide-right) {
+    overflow-x: clip;
+  }
+
+  .slide-left {
+    animation: slide-left var(--duration-slide) ease-out;
+  }
+
+  .slide-right {
+    animation: slide-right var(--duration-slide) ease-out;
+  }
+}
+
+@keyframes slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(var(--space-6));
+  }
+}
+
+@keyframes slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--space-6)));
+  }
 }
 
 /* Alt ekranların başı: geri bağlantısı ve başlık */

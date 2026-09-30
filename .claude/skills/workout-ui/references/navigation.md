@@ -18,21 +18,21 @@ Ana gezinme dört ekrandan oluşur: Ana Sayfa, Geçmiş, İlerleme, Ayarlar. Uyg
 | Gün | `#/program/<gün>` | ← Program |
 | Satır | `#/program/<gün>/<satır ya da yeni>` | ← gün adı |
 
-Bugünkü "← Günler" bağlantıları değişir (kullanıcı kararı): antrenman, çakışma ve Program ekranlarında "← Ana Sayfa" olur, sekmedeki adla aynı; Geçmiş, İlerleme ve Ayarlar'da kalkar, çünkü oralarda sekmeler var. Testlerdeki "← Günler" seçicileri aynı adımda güncellenir.
+Eski "← Günler" bağlantısı yok (kullanıcı kararı): antrenman, çakışma ve Program ekranlarında "← Ana Sayfa" (sekmedeki adla aynı); sekmeli ekranlarda geri bağlantısı yoktur.
 
 ## Sekme çubuğu
 ```html
 <header class="app-head">
   <h1 class="app-title">Antrenman Takibi</h1>  <!-- Geçmiş, İlerleme ve Ayarlar'da <p class="app-title"> -->
   <nav class="tabs" aria-label="Ana gezinme">
-    <a class="tab" href="#/" aria-current="page">Ana Sayfa</a>
-    <a class="tab" href="#/gecmis">Geçmiş</a>
-    <a class="tab" href="#/ilerleme">İlerleme</a>
-    <a class="tab" href="#/ayarlar">Ayarlar</a>
+    <a class="tab" href="#/" data-nav="tab" aria-current="page">Ana Sayfa</a>
+    <a class="tab" href="#/gecmis" data-nav="tab">Geçmiş</a>
+    <a class="tab" href="#/ilerleme" data-nav="tab">İlerleme</a>
+    <a class="tab" href="#/ayarlar" data-nav="tab">Ayarlar</a>
   </nav>
 </header>
 ```
-- **Bağlantıdır, ARIA sekmesi değildir.** Öğeler `<a href="#/…">` olur; `role="tablist"` ve `role="tab"` kullanılmaz. ARIA sekme deseni aynı sayfadaki panelleri değiştirmek içindir ve ok tuşlarıyla gezinme bekler; burada ise ekran değişir. Bağlantı bugünkü davranışı da korur: adres değişir, `hashchange` olur, `beforeLeave` çalışır (kaydedilmemiş düzeltmede onay sorar), yeni ekran çizilir; telefonun geri tuşu da çalışır.
+- **Bağlantıdır, ARIA sekmesi değildir.** Öğeler `<a href="#/…">` olur; `role="tablist"` ve `role="tab"` kullanılmaz. ARIA sekme deseni aynı sayfadaki panelleri değiştirmek içindir ve ok tuşlarıyla gezinme bekler; burada ise ekran değişir. Bağlantı davranışı da korur: adres değişir, `hashchange` olur, `beforeLeave` çalışır (kaydedilmemiş düzeltmede onay sorar), yeni ekran çizilir. `data-nav="tab"` sayesinde sekme değişimi geçmişe kayıt eklemez (aşağıda "Geçmiş ve kaydırma").
 - **Etkin sekme gerçekten açık olan ekrandır.** Tek bir bağlantıda `aria-current="page"` bulunur ve görünüş bu öznitelikten gelir (`.tab[aria-current="page"]`). Ayrı bir "active" sınıfı tutulmaz; böylece görünen ile ekran okuyucunun söylediği birbirinden ayrılamaz.
 - **Etkin sekmeyi çizilen ekran belirler, adres metni değil.** Ana sayfa boş adreste ve bilinmeyen adreslerde de açılır; `location.hash` ile karşılaştırma orada hiçbir sekmeyi seçmez. Bunu `js/ui.js`'teki `appHeader(current)` yapar; dört ekran kendi rotasını verir (örneğin `renderHistory` → `appHeader('#/gecmis')`).
 - **Görünüş:** sekme yazısı `--font-size-md`, 500, `--muted`. Etkin sekmede yazı `--accent`, altında 3 px kalınlıkta, uçları yuvarlak `--accent` çizgi. Sekmeler satırı kaplar (`justify-content: space-between`, görseldeki gibi); aralarında en az `--space-3` boşluk olur ve her sekme en az `--tap` yüksekliktedir.
@@ -42,12 +42,12 @@ Bugünkü "← Günler" bağlantıları değişir (kullanıcı kararı): antrenm
 
 ## Geri bağlantısı
 ```html
-<a class="back" href="#/program">← Program</a>
+<a class="back" href="#/program" data-nav="up">← Program</a>
 ```
 - Sol üstte, başlığın üstünde durur ve sayfanın ilk odaklanan öğesidir.
 - `--accent` yazı; en az `--tap` yükseklik (`inline-flex`, dikeyde ortalı). Ok "←" karakteridir; erişilebilir ad "← Program" olarak kalır, testler buna bakar.
 - Yazı, gidilen ekranın adıdır: "Ana Sayfa", "Program", gün adı, "Geçmiş", "İlerleme".
-- Düz bir bağlantıdır. Çıkış onayı (`beforeLeave`) `main.js`'te zaten çalışır; bağlantıya ayrıca tıklama işleyicisi yazılmaz.
+- `data-nav="up"` taşır: `main.js` tıklamayı yakalar; geldiğimiz ekran oysa gerçekten geri gider (`history.back()`), değilse bulunulan kaydın yerine geçer. Geçmiş büyümez. Çıkış onayı (`beforeLeave`) yine çalışır; bağlantıya ayrıca tıklama işleyicisi yazılmaz. Formdaki "Vazgeç" bağlantısı da `up`'tır.
 
 ## Antrenman üst çubuğu
 - `.topbar` yapışkan kalır (`position: sticky; top: 0`); zemini `--bg`, altında 1 px `--border`.
@@ -55,7 +55,26 @@ Bugünkü "← Günler" bağlantıları değişir (kullanıcı kararı): antrenm
 - Sekme çubuğu yoktur: antrenman sırasında ekran yalnızca set girmeye ayrılır ve yanlışlıkla başka ekrana geçme olasılığı azalır.
 - 320 px'te üç öğe sığmazsa başlık alt satıra geçer; geri bağlantısı ve düğme küçülmez.
 
+## Geçmiş ve kaydırma
+Tarayıcı geçmişi, telefona yüklenen bir uygulamadaki gibi tutulur (kullanıcının isteği, Aşama 12). Her kayıt geldiği ekranı bilir (`history.state.from`) ve telefonun geri hareketi uygulamadaki "←" ile aynı yere gider. Geçmişte bulunulan derinlik kadar kayıt olur; sekmeler arasında gidip gelmek kayıt biriktirmez.
+
+| Tür | Nerede | Ne yapar |
+|---|---|---|
+| Derine giriş (`push`) | Liste öğeleri, "Başla", "Devam et", "Programı düzenle", "Düzenle", "+ Satır ekle"; koddan yeni gün ekleyince | Geçmişe kayıt ekler; sade `<a href>` yeter |
+| Üst ekrana dönüş (`up`) | "←" bağlantıları ve formdaki "Vazgeç" (`data-nav="up"`); koddan Bitir, Kaydet, Sil, İptal sonrası | Geldiğimiz ekran oysa `history.back()`, değilse yerine geçer |
+| Yerine geçme (`replace`) | Koddan: bulunamayan kayıttan listeye düşerken | Bulunulan kaydın yerine geçer |
+| Sekme (`tab`) | Sekmeler ve bir ana ekrana götüren bağlantı ("Yedek al"), `data-nav="tab"` | Ana Sayfa'dan başka sekmeye: kayıt ekler (Ana Sayfa altta kalır); sekmeler arası: yerine geçer; Ana Sayfa'ya: `up` |
+
+- Koddan ekran değiştirmek `navigate(adres, mesaj, tür)` ile olur (`main.js`, ekranlara parametre olarak gelir). Yeni bir bağlantı ya da çağrı eklerken türünü bu tablodan seç; yanlış tür geri hareketini bozar.
+- **Kaydırma:** yalnızca dört ana ekranda. Parmak sola kayarsa sıradaki sekme, sağa kayarsa önceki açılır; uçlarda bir şey olmaz. Sayılması için en az 70 px ve çoğunlukla yatay (yatay yol dikeyin en az 2 katı), 0,8 sn'den kısa hareket gerekir (`js/swipe.js`). Dikey kaydırmaya ve dokunuşlara karışmaz (dinleyiciler `passive`).
+- **Kenarlar telefonundur:** ekranın 24 px kenarından başlayan kaydırma sayılmaz; iPhone'da geri/ileri, Android'de sistem geri hareketidir ve sayfa bunları kapatamaz. Chrome'un kendi yatay kaydırma gezinmesi `html { overscroll-behavior-x: none }` ile kapalıdır.
+- Dinleyici bütün sayfadadır (`document`): kısa bir ekranın boş alt kısmı `main`'in dışında kalır.
+- Ana ekrana yatay sürüklenen bir öğe (kaydırılan şerit, kaydırıcı) eklenirse kaydırmayla çakışır: ya eklenmez ya da taşan sekme çubuğu gibi dışarıda bırakılır (`main.js`).
+- Kaydırmayla açılan ekran `--duration-slide` sürede, `--space-6` kadar yandan kayarak gelir; "hareketi azalt" açıksa kayma olmaz.
+- Test: uçtan uca testteki "Uygulama gibi geçmiş ve kaydırma" akışı, Chrome'a gerçek dokunma hareketi göndererek denetler.
+
 ## Yeni ekran eklerken
 - Önce ana ekran mı alt ekran mı olduğuna karar ver. Dört sekme sabittir; kullanıcı kararı olmadan yeni sekme eklenmez.
+- Ekrana götüren bağlantının ve koddaki `navigate` çağrılarının türünü seç ("Geçmiş ve kaydırma").
 - Alt ekranın geri bağlantısı, kullanıcının geldiği yere değil ekranın üst ekranına gider: Satır → Gün → Program → Ana Sayfa. Bugünkü yönlendirme de böyledir.
 - Rota `main.js`'e eklenir. Yeni dosya `sw.js` `FILES` listesine, rota CLAUDE.md'deki rota listesine yazılır.

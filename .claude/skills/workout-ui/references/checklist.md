@@ -35,6 +35,7 @@ Uçtan uca testteki "Tasarım" akışı taşmayı ve dokunma alanını ana ve al
 ## Davranış ve testler
 - [ ] Değiştirilen her sınıf, kimlik ve metin `tests/e2e.py`'de arandı; bilerek değişenler testte de güncellendi.
 - [ ] `data-action`, `data-field`, `data-card`, `data-form`, form alanı adları ve olay akışı değişmedi.
+- [ ] Yeni bağlantının ya da `navigate` çağrısının türü doğru: derine giriş, üst ekrana dönüş (`data-nav="up"`), yerine geçme ya da sekme (`data-nav="tab"`); [navigation.md → Geçmiş ve kaydırma](navigation.md#geçmiş-ve-kaydırma).
 - [ ] Birim testleri ve uçtan uca test geçiyor. `tests/artifacts/` ekran görüntülerine bakıldı; değişen ekranın görüntüsü yoksa teste eklendi.
 - [ ] Yayın kuralları uygulandı: CLAUDE.md'ye göre `sw.js` `VERSION` artırıldı, yeni dosya `FILES` listesine eklendi.
 - [ ] Uygulamaya giren görseller küçültülmüş kopyalardır (kaynak dosyalar değil), `FILES` listesindedir ve internetsiz açılışta görünür.

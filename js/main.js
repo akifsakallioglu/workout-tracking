@@ -2,7 +2,10 @@
 // #/gecmis/<kimlik> antrenmanın ayrıntısı, #/gecmis/<kimlik>/duzenle düzenleme, #/ilerleme ilerleme
 // listesi, #/ilerleme/<gün>/<hareket> grafik, #/program program düzenleyici, #/program/<gün> gün,
 // #/program/<gün>/<satır> satır (yeni satır: #/program/<gün>/yeni), #/ayarlar ayarlar.
+// Tarayıcı geçmişi telefona yüklenen bir uygulamadaki gibi tutulur (navigate); dört ana ekranda
+// parmakla kaydırınca sekme değişir.
 import { initStore, waitForWrites } from './store.js';
+import { listenForSwipes } from './swipe.js';
 import { renderHistory, renderSessionDetail } from './views/history.js';
 import { renderHome } from './views/home.js';
 import { renderDayEditor, renderItemEditor, renderProgram } from './views/program.js';
@@ -11,36 +14,74 @@ import { renderSettings } from './views/settings.js';
 import { renderWorkout } from './views/workout.js';
 
 const app = document.getElementById('app');
+const TABS = ['#/', '#/gecmis', '#/ilerleme', '#/ayarlar']; // sekme sırası; kaydırma bu sırayla gezer
 let view = null; // { beforeLeave?(), flush?(), hasUnsavedChanges?(), destroy?() }
 let shownHash = null;
+let shownRoute = null; // açık ekranın rotası; ana sayfa boş ve bilinmeyen adreste de '#/'
+let shownTab = null; // açık ana ekranın sekmesi; alt ekranlarda null
+let shownFrom = null; // açık ekrana hangi ekrandan gelindi (geçmiş kaydında da yazılı)
+let replacing = null; // yerine geçme sürüyor: yeni kayıt, eskisinin geldiği yeri devralır
+let slide = ''; // kaydırmayla açılan ekranın giriş yönü: 'left' ya da 'right'
 let flash = '';
 let showCount = 0;
 
-function navigate(hash, message = '') {
+// Ekran değiştirir. Geçmiş, telefona yüklenen bir uygulamadaki gibi tutulur: her kayıt hangi ekrandan
+// gelindiğini bilir (history.state.from) ve telefonun geri hareketi uygulamadaki "←" ile aynı yere gider.
+// - 'push': daha derin bir ekrana giriş (ör. gün → satır); geçmişe kayıt ekler.
+// - 'up': üst ekrana dönüş ("←", Bitir, Kaydet, Sil sonrası). Geldiğimiz ekran oysa geri gider ve kayıt
+//   eklemez; değilse (ör. adres doğrudan açıldıysa) bulunulan kaydın yerine geçer.
+// - 'replace': bulunulan kaydın yerine geçer (ör. bulunamayan kayıttan listeye).
+// - 'tab': sekme değişimi. Ana Sayfa'dan başka sekmeye geçerken Ana Sayfa geçmişte altta kalır;
+//   sekmeler arasında kayıt eklenmez; Ana Sayfa'ya dönüş 'up'tır.
+function navigate(hash, message = '', mode = 'push') {
+  if (mode === 'tab') {
+    if (hash === shownTab) return;
+    mode = hash === '#/' ? 'up' : shownTab === '#/' ? 'push' : 'replace';
+  }
   flash = message;
-  if (location.hash === hash) show();
-  else location.hash = hash;
+  const from = history.state?.from ?? null;
+  if (hash === location.hash) show();
+  else if (mode === 'up' && from === hash) history.back();
+  else if (mode === 'push') location.hash = hash;
+  else {
+    replacing = { from };
+    location.replace(hash);
+  }
 }
 
 async function show() {
   view?.destroy?.();
   view = null;
+  // Yeni geçmiş kaydına hangi ekrandan gelindiği yazılır; geri ya da ileri ile dönülen kayıtta zaten
+  // yazılıdır. Yerine geçen kayıt, eskisinin geldiği yeri devralır.
+  if (history.state === null) history.replaceState({ from: replacing ? replacing.from : shownRoute }, '');
+  replacing = null;
+  shownFrom = history.state.from;
   shownHash = location.hash;
   const message = flash;
   flash = '';
   // Her ekran yeni bir kaba çizilir; eski ekranın olay dinleyicileri onunla birlikte gider.
   const container = document.createElement('div');
+  // Kaydırmayla açılan ekran kısa bir kaymayla gelir ("hareketi azalt" açıksa gelmez); kayma bitince
+  // sınıf kalkar.
+  if (slide && matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+    container.className = `slide-${slide}`;
+    container.addEventListener('animationend', () => container.removeAttribute('class'), { once: true });
+  }
+  slide = '';
   app.replaceChildren(container);
   const token = ++showCount;
   const hash = location.hash;
   const workout = hash.match(/^#\/antrenman\/([\w-]+)$/);
-  const history = hash.match(/^#\/gecmis\/([\w-]+)(\/duzenle)?$/);
+  const session = hash.match(/^#\/gecmis\/([\w-]+)(\/duzenle)?$/);
   const progress = hash.match(/^#\/ilerleme\/([\w-]+)\/([\w-]+)$/);
   const programPath = hash.match(/^#\/program(?:\/([\w-]+)(?:\/([\w-]+))?)?$/);
+  shownTab = TABS.includes(hash) ? hash : workout || session || progress || programPath ? null : '#/';
+  shownRoute = shownTab ?? hash;
   let shown;
   if (workout) shown = await renderWorkout(container, { dayId: workout[1], navigate });
-  else if (history?.[2]) shown = await renderWorkout(container, { editSessionId: history[1], navigate });
-  else if (history) shown = await renderSessionDetail(container, { sessionId: history[1], navigate, flash: message });
+  else if (session?.[2]) shown = await renderWorkout(container, { editSessionId: session[1], navigate });
+  else if (session) shown = await renderSessionDetail(container, { sessionId: session[1], navigate, flash: message });
   else if (hash === '#/gecmis') shown = await renderHistory(container, { flash: message });
   else if (progress) shown = await renderProgressDetail(container, { dayId: progress[1], exerciseId: progress[2], navigate });
   else if (hash === '#/ilerleme') shown = await renderProgressList(container);
@@ -56,12 +97,39 @@ async function show() {
 
 // Ekran değişmeden önce açık ekran bekleyen değişikliğini yazar; gerekirse kullanıcıya sorar.
 window.addEventListener('hashchange', () => {
-  if (location.hash === shownHash) return; // aşağıda geri alınan adres
+  if (location.hash === shownHash) {
+    // Aşağıda geri alınan adres: yeni kayıt, açık ekranın kaydı gibi işaretlenir.
+    if (history.state === null) history.replaceState({ from: shownFrom }, '');
+    return;
+  }
   if (view?.beforeLeave && !view.beforeLeave()) {
+    replacing = null;
+    slide = '';
     location.hash = shownHash;
     return;
   }
   show();
+});
+
+// data-nav="tab" (sekme) ve data-nav="up" (üst ekrana dönüş) bağlantıları navigate'ten geçer. Diğer
+// bağlantılar daha derine götürür ve tarayıcının olağan davranışıyla geçmişe kayıt ekler.
+document.addEventListener('click', (event) => {
+  const link = event.target.closest('a[data-nav]');
+  if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  navigate(link.getAttribute('href'), '', link.dataset.nav);
+});
+
+// Ana ekranlarda kaydırma: sağdan sola sıradaki sekme, soldan sağa önceki; uçlarda bir şey olmaz.
+// Sayfanın tamamı dinlenir: kısa bir ekranın boş alt kısmı main'in dışında kalır.
+listenForSwipes(document, (direction, target) => {
+  if (!shownTab) return;
+  const tabs = target.closest?.('.tabs');
+  if (tabs && tabs.scrollWidth > tabs.clientWidth) return; // taşan sekme çubuğu kendi içinde kayar
+  const next = TABS[TABS.indexOf(shownTab) + (direction === 'left' ? 1 : -1)];
+  if (!next) return;
+  slide = direction;
+  navigate(next, '', 'tab');
 });
 
 // Sayfa kapanırken ya da yenilenirken: bekleyen değişiklik hemen yazılmaya başlar; bekleyen ya da

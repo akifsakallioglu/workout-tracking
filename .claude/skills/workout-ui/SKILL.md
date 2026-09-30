@@ -18,7 +18,7 @@ Bu çalışma görsel yenilemedir: ekranlar aynı işi aynı veriyle yapar, yaln
 |---|---|
 | [tokens.md](references/tokens.md) | Renk, yazı boyutu, boşluk, köşe, kontrast; `:root` değişkeni eklerken ya da değiştirirken |
 | [components.md](references/components.md) | Düğme, kart, liste öğesi, form alanı, çip, ikon, mesaj ve bant |
-| [navigation.md](references/navigation.md) | Sekme çubuğu, geri bağlantıları, yeni ekran ya da rota |
+| [navigation.md](references/navigation.md) | Sekme çubuğu, geri bağlantıları, tarayıcı geçmişi ve geri hareketi, parmakla kaydırma, yeni ekran ya da rota |
 | [screens.md](references/screens.md) | Belirli bir ekranda çalışırken: ana sayfa, antrenman, geçmiş, ilerleme, program, ayarlar |
 | [mockups.md](references/mockups.md) | Tasarım görselleriyle karşılaştırırken; görselden ne alınır, ne alınmaz; verilen ve bekleyen kararlar |
 | [checklist.md](references/checklist.md) | İşi bitirmeden önce: kontrast, odak, taşma, dokunma alanı, testler |
@@ -33,7 +33,7 @@ Görseller de `references/` içinde: iki tasarım görseli (`mockup-main-tabs.pn
 5. **Bitirmeden [checklist.md](references/checklist.md)'yi uygula:** kontrast, klavye odağı, 320 ve 390 px'te taşma, 44 px dokunma alanı, testler ve ekran görüntüleri.
 
 ## Değişmeyenler
-- **Davranış:** otomatik kaydetme ve kayıt durumu, devam eden antrenman ve taslağı, makine ekleme ve düzenleme, dönüşümlü satırlar, geçmiş ve düzeltme, ilerleme ve grafikler, yedekleme, çevrimdışı çalışma, ekrandan çıkarken sorulan onaylar (`beforeLeave`).
+- **Davranış:** otomatik kaydetme ve kayıt durumu, devam eden antrenman ve taslağı, makine ekleme ve düzenleme, dönüşümlü satırlar, geçmiş ve düzeltme, ilerleme ve grafikler, yedekleme, çevrimdışı çalışma, ekrandan çıkarken sorulan onaylar (`beforeLeave`), uygulama gibi geçmiş ve sekmeler arasında kaydırma (kullanıcının isteği; [navigation.md](references/navigation.md#geçmiş-ve-kaydırma)).
 - **Veri şeması ve depolama anahtarları.** Görsel bir iş için veritabanına alan eklenmez; ekrandaki her yeni bilgi mevcut kayıtlardan hesaplanır.
 - **Ağırlık ve tekrar girişi:** hareket başına tek ağırlık kutusu, set başına tekrar kutusu, "+ Set" / "− Set", sayısal klavye, kutularda en az 16 px yazı. Yerleşim aynı kalır; yalnızca renk, köşe ve boşluk değişir.
 - **Kavramlar ve metinler:** "Satır" (programdaki bir sıra; dönüşümlü satırda iki hareket olabilir), "Hareket", "Makine" ve bugünkü etiketler kalır. Görsellerdeki farklı metinler kullanılmaz; metin ancak kullanıcı isterse değişir.

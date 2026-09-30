@@ -16,6 +16,12 @@ Salonda telefondan kullanılan kişisel antrenman günlüğü. Her hareket için
 
 Uygulama ilk açılışta dosyalarını telefona kaydeder; sonraki açılışlarda internet gerekmez.
 
+## Gezinme
+
+- Ana Sayfa, Geçmiş, İlerleme ve Ayarlar arasında üstteki sekmelerle ya da bu dört ekranda parmağı sağa sola kaydırarak geçersiniz.
+- Telefonun geri hareketi uygulamadaki "←" ile aynı yere gider. Sekmeler arasında gidip gelmek geçmişte kayıt biriktirmez; bir sekmedeyken geri hareketi Ana Sayfa'ya döner.
+- Ekranın en kenarından başlayan kaydırma telefonun kendi hareketidir (iPhone'da geri ya da ileri, Android'de geri).
+
 ## Yedekleme
 
 Veriler yalnızca telefonda durduğu için telefon değişirse, kaybolursa ya da tarayıcı verileri silinirse kaybolur. **Ayarlar → Yedeği indir** (ya da **Paylaş…**) ile yedek alın ve dosyayı Drive gibi başka bir yerde saklayın. Geri yüklemek için **Ayarlar → Yedeği geri yükle**. Son yedekten bu yana 30 günden fazla geçince ana ekranda hatırlatma çıkar.
@@ -74,6 +80,12 @@ Simgelerin kaynağı `icons/icon-source.png` (kare, zemini kenarlara kadar dolu,
 .venv\Scripts\python tools\render_icons.py
 ```
 
+Ana sayfadaki gün görsellerinin kaynakları `.claude/skills/workout-ui/references/` içindedir (`push.png` … `lower.png`). Kaynak değişirse uygulamadaki küçük kopyaları (`icons/day-<gün>.png`) yeniden üretin:
+
+```
+.venv\Scripts\python tools\render_day_images.py
+```
+
 ## Klasörler
 
 ```
@@ -81,7 +93,9 @@ index.html, manifest.webmanifest, sw.js   sayfa, uygulama tanımı, internetsiz 
 css/app.css                               görünüm
 js/                                       uygulama kodu (logic.js: saf kurallar, store.js: veri erişimi)
 js/views/                                 ekranlar
-icons/                                    simgeler
+icons/                                    simgeler ve gün görselleri
 tests/                                    birim ve uçtan uca testler
+tools/                                    simge ve gün görseli üreten araçlar
 docs/plan.md                              geliştirme planı
+.claude/skills/workout-ui/                arayüz kuralları ve tasarım görselleri (Claude Code skill'i)
 ```

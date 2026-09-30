@@ -337,6 +337,12 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
   - Ana ve alt ekranlar 390 ve 320 px'te yatay taşmıyor; dokunma alanları en az 44 px (testte).
   - Açık ekranın sekmesi işaretli; alt ekranlarda sekme yok, geri bağlantısı var.
 
+**Aşama 12: Uygulama gibi geçmiş ve sekmeler arasında kaydırma** (kullanıcının isteği)
+- Tarayıcı geçmişi telefona yüklenen bir uygulamadaki gibi tutulur: sekme değişimi geçmişe kayıt eklemez (Ana Sayfa'dan başka sekmeye geçerken Ana Sayfa altta kalır); "←" bağlantıları ve Bitir, Kaydet, Sil sonrası dönüşler geldiğiniz ekrana gerçekten geri gider. Telefonun geri hareketi "←" ile aynı yere gider; geçmişte bulunduğunuz derinlik kadar kayıt olur.
+- Dört ana ekranda parmakla sağa sola kaydırma sekme değiştirir. Ekranın kenarından başlayan kaydırma telefonun kendi hareketidir; Chrome'un kaydırmayla geri/ileri gitmesi kapalıdır. Yeni ekran kısa bir kaymayla gelir ("hareketi azalt" açıksa gelmez).
+- Tarayıcı geçmişi hız sorunu yaratmaz (yalnızca kısa adresler tutulur, tarayıcı listeyi sınırlar); amaç, geri hareketinin anlaşılır olması.
+- *Bitti sayılır:* sekmeler arasında gidip gelmek geçmişi büyütmüyor; "←" ve "Bitir" geri gidiyor; kaydırma sekme değiştiriyor, kenardan ve dikey kaydırma değiştirmiyor, alt ekranlarda kaydırma yok (uçtan uca testte gerçek dokunma hareketiyle).
+
 ## 9. İlk geliştirme görevi: Aşama 1
 Aşama 0 bittikten sonra başlar. Doğrulandıktan sonra durulur ve sonuç size bildirilir.
 

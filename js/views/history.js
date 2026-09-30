@@ -43,7 +43,7 @@ function badgeHtml(iso) {
 export async function renderSessionDetail(container, { sessionId, navigate, flash }) {
   const session = finishedSessions(await loadSessions()).find((candidate) => candidate.id === sessionId);
   if (!session) {
-    navigate('#/gecmis');
+    navigate('#/gecmis', '', 'replace');
     return {};
   }
   let message = '';
@@ -52,7 +52,7 @@ export async function renderSessionDetail(container, { sessionId, navigate, flas
   function render() {
     container.innerHTML = `
       <header class="page-head">
-        <a class="back" href="#/gecmis">← Geçmiş</a>
+        <a class="back" href="#/gecmis" data-nav="up">← Geçmiş</a>
         <h1>${escapeHtml(session.dayName)} · ${formatDay(session.startedAt)}</h1>
         <p class="muted">Başlangıç ${formatTime(session.startedAt)} · ${formatDuration(session.startedAt, session.finishedAt)} · ${sessionSummary(session)}</p>
       </header>
@@ -81,7 +81,7 @@ export async function renderSessionDetail(container, { sessionId, navigate, flas
     render();
     try {
       await deleteSession(session.id);
-      navigate('#/gecmis', 'Antrenman silindi.');
+      navigate('#/gecmis', 'Antrenman silindi.', 'up');
     } catch (error) {
       console.warn('Antrenman silinemedi', error);
       message = `Antrenman silinemedi. ${errorReason(error)}`;

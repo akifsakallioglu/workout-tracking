@@ -49,7 +49,7 @@ export async function renderProgressDetail(container, { dayId, exerciseId, navig
   const [program, sessions] = await Promise.all([loadProgram(), loadSessions()]);
   const machines = machinesWithRecords(sessions, program, dayId, exerciseId);
   if (!machines.length) {
-    navigate('#/ilerleme');
+    navigate('#/ilerleme', '', 'replace');
     return {};
   }
   const latest = finishedSessions(sessions).find(
@@ -75,7 +75,7 @@ export async function renderProgressDetail(container, { dayId, exerciseId, navig
     const counter = counterText(progressCounter(sessions, { dayId, exerciseId, equipmentId }));
     container.innerHTML = `
       <header class="page-head">
-        <a class="back" href="#/ilerleme">← İlerleme</a>
+        <a class="back" href="#/ilerleme" data-nav="up">← İlerleme</a>
         <h1>${escapeHtml(name)}</h1>
         <p class="muted">${escapeHtml(dayName)}</p>
       </header>

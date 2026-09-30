@@ -108,7 +108,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
   const [program, sessions] = await Promise.all([loadProgram(), loadSessions()]);
   const editing = editSessionId ? sessions.find((session) => session.id === editSessionId && session.finishedAt) : null;
   if (editSessionId && !editing) {
-    navigate('#/gecmis');
+    navigate('#/gecmis', '', 'replace');
     return {};
   }
   // Düzenlenen antrenmanın günü kayıttaki hâlidir (program sonradan değişmiş olabilir).
@@ -116,7 +116,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     ? { id: editing.dayId, name: editing.dayName }
     : program.days.find((candidate) => candidate.id === dayId);
   if (!day) {
-    navigate('#/');
+    navigate('#/', '', 'replace');
     return {};
   }
   const active = editing ? null : activeSession(sessions);
@@ -214,10 +214,10 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       <header class="topbar">
         <div class="topbar-row">
           ${editing
-            ? `<a class="back" href="#/gecmis/${escapeHtml(editing.id)}">← Vazgeç</a>
+            ? `<a class="back" href="#/gecmis/${escapeHtml(editing.id)}" data-nav="up">← Vazgeç</a>
                <h1>${escapeHtml(day.name)} · ${formatDay(editing.startedAt)}</h1>
                <button type="button" class="button primary" data-action="save-edit"${disabled}>Kaydet</button>`
-            : `<a class="back" href="#/">← Ana Sayfa</a>
+            : `<a class="back" href="#/" data-nav="up">← Ana Sayfa</a>
                <h1>${escapeHtml(day.name)}</h1>
                <button type="button" class="button primary" data-action="finish"${disabled}>Bitir</button>`}
         </div>
@@ -420,7 +420,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       state.saved = true;
       // İlk bitirilen antrenmandan sonra tarayıcıdan verileri kendiliğinden silmemesi istenir.
       requestPersistentStorage().catch((error) => console.warn('Kalıcı depolama istenemedi', error));
-      navigate('#/', `${day.name} antrenmanı kaydedildi ✓`);
+      navigate('#/', `${day.name} antrenmanı kaydedildi ✓`, 'up');
     } catch (error) {
       console.warn('Antrenman bitirilemedi', error);
       state.retry = finish;
@@ -455,7 +455,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     try {
       await saveSession({ ...editing, entries });
       state.saved = true;
-      navigate(`#/gecmis/${editing.id}`, 'Değişiklikler kaydedildi ✓');
+      navigate(`#/gecmis/${editing.id}`, 'Değişiklikler kaydedildi ✓', 'up');
     } catch (error) {
       console.warn('Değişiklikler kaydedilemedi', error);
       state.retry = saveEdit;
@@ -472,7 +472,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     state.timer = null;
     if (!hasData) {
       state.saved = true;
-      navigate('#/');
+      navigate('#/', '', 'up');
       return;
     }
     state.writeContext = 'cancel';
@@ -483,7 +483,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       // Yazılmakta olan bir taslak varsa silme ondan sonra yapılır.
       await deleteSession(state.sessionId);
       state.saved = true;
-      navigate('#/', 'Antrenman iptal edildi.');
+      navigate('#/', 'Antrenman iptal edildi.', 'up');
     } catch (error) {
       console.warn('Antrenman silinemedi', error);
       state.retry = () => cancel(true);
@@ -956,7 +956,7 @@ function renderConflict(container, { active, day, program, navigate }) {
   function render() {
     container.innerHTML = `
       <header class="page-head">
-        <a class="back" href="#/">← Ana Sayfa</a>
+        <a class="back" href="#/" data-nav="up">← Ana Sayfa</a>
       </header>
       <section class="card conflict" aria-labelledby="conflict-title">
         <p class="eyebrow">Devam eden antrenman var</p>

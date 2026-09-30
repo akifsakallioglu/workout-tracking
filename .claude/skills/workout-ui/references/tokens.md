@@ -115,6 +115,7 @@ Sistem yazı tipi kalır: `system-ui, -apple-system, "Segoe UI", Roboto, sans-se
 | `--icon-md` | `20px` | Liste oku, düğme içindeki simge |
 | `--icon-lg` | `24px` | Ayarlar kartlarının başlık simgesi |
 | `--shadow-overlay` | `0 8px 24px rgba(0, 0, 0, 0.4)` | Yalnızca sayfanın üstünde duran bant (yeni sürüm); kartlar gölgesiz |
+| `--duration-slide` | `200ms` | Kaydırmayla açılan ana ekranın kayması; "hareketi azalt" açıksa kayma yok |
 
 ## Tema ve tarayıcı rengi
 - `:root { color-scheme: dark; }`: tarayıcının kendi çizdiği parçalar (seçim listesi, dosya seçici, kaydırma çubuğu) da koyu çizilir. Tek tema olduğu için uçtan uca testteki açık/koyu ekran görüntüsü çiftleri tek görüntüye iner.
