@@ -38,6 +38,7 @@ import {
   requestPersistentStorage,
   saveProgram,
   saveSession,
+  waitForWrites,
 } from '../store.js';
 import { errorReason, escapeHtml } from '../ui.js';
 import { cardHtml, cardLiveText, isInvalid } from './exercise-card.js';
@@ -924,16 +925,18 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
   render();
 
   return {
-    // Uygulama içinde başka ekrana geçerken: bekleyen değişiklik hemen yazılır. Son yazma
-    // başarısız olduysa kullanıcıya sorulur.
+    // Uygulama içinde başka ekrana geçerken: bekleyen değişiklik hemen yazılır. Yazma sürüyorsa
+    // sonucu beklenir (söz döner; o sırada bu ekran açık kalır). Yazma başarısız olduysa kullanıcıya
+    // sorulur; kalırsa değerler ekranda durur ve "Tekrar dene" ile yeniden yazılır.
     beforeLeave() {
       if (state.saved) return true;
       if (state.editing) {
         return !state.dirty || confirm('Değişiklikler kaydedilmedi ve kaybolacak. Çıkmak istiyor musunuz?');
       }
-      const failed = state.status.state === 'error';
       flush();
-      return !failed || confirm('Son değişiklikler kaydedilemedi ve kaybolabilir. Yine de çıkmak istiyor musunuz?');
+      const leave = (saved) =>
+        saved || confirm('Son değişiklikler kaydedilemedi ve kaybolabilir. Yine de çıkmak istiyor musunuz?');
+      return hasPendingWrites() ? waitForWrites().then(leave) : leave(state.status.state !== 'error');
     },
     flush,
     // Sayfa kapanırken ya da yenilenirken tarayıcı uyarı göstersin mi.

@@ -40,6 +40,40 @@ FAIL_WRITES_SCRIPT = """
 })();
 """
 
+# window.__failWritesLater true iken IndexedDB yazması (put ya da delete) yapılır, sonra işlem geri alınır:
+# hata, gerçek yazma hatalarındaki gibi işlem çalışınca (gecikmeli) gelir.
+FAIL_WRITES_LATER_SCRIPT = """
+(() => {
+  for (const method of ['put', 'delete']) {
+    const original = IDBObjectStore.prototype[method];
+    IDBObjectStore.prototype[method] = function (...args) {
+      const request = original.apply(this, args);
+      if (window.__failWritesLater) request.addEventListener('success', () => this.transaction.abort());
+      return request;
+    };
+  }
+})();
+"""
+
+# Veritabanını başka bir bağlantıdaki yazma işlemiyle tutar: uygulamanın yazmaları window.__releaseWrites()
+# çağrılana kadar başlamaz (yazma sürerken yapılanları sınamak için). Tutarken veritabanı okunamaz.
+HOLD_WRITES_SCRIPT = """
+() => new Promise((resolve, reject) => {
+  const request = indexedDB.open('antrenman-takibi');
+  request.onerror = () => reject(request.error);
+  request.onsuccess = () => {
+    const db = request.result;
+    const transaction = db.transaction(['meta', 'sessions'], 'readwrite');
+    const store = transaction.objectStore('sessions');
+    let held = true;
+    window.__releaseWrites = () => { held = false; };
+    const keepAlive = () => { if (held) store.count().onsuccess = keepAlive; };
+    store.count().onsuccess = () => { resolve(); keepAlive(); };
+    transaction.oncomplete = () => db.close();
+  };
+})
+"""
+
 READ_SCRIPT = """
 ([storeName, key]) => new Promise((resolve, reject) => {
   const request = indexedDB.open('antrenman-takibi');
@@ -630,6 +664,32 @@ def autosave_steps(run):
         expect(reps(lat, 1)).to_have_value("10")
         go_home(page)
 
+    def leaving_with_write_error(page):
+        page.get_by_role("link", name="Devam et").click()
+        lat = card(page, "Lat Pulldown (wide grip)")
+        expect(reps(lat, 1)).to_have_value("10")
+        page.evaluate("window.__failWrites = true")
+        reps(lat, 2).fill("9")
+        # Telefonun geri hareketi: kutudan çıkılmadan, 0,5 sn beklemeden; yazmayı çıkış başlatır.
+        with page.expect_event("dialog", timeout=5000) as leaving:
+            page.go_back()
+        assert leaving.value.message == "Son değişiklikler kaydedilemedi ve kaybolabilir. Yine de çıkmak istiyor musunuz?", leaving.value.message
+        leaving.value.dismiss()
+        expect(page).to_have_url(re.compile(r"#/antrenman/pull$"))
+        expect(save_status(page)).to_contain_text("Kaydedilemedi.")
+        expect(reps(lat, 2)).to_have_value("9")
+        draft = next(card for card in unfinished(page)[0]["draft"]["cards"] if card["exerciseId"] == "lat-pulldown-wide-grip")
+        assert draft["reps"] == ["10", "", ""], draft
+        page.evaluate("window.__failWrites = false")
+        page.get_by_role("button", name="Tekrar dene").click()
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        draft = next(card for card in unfinished(page)[0]["draft"]["cards"] if card["exerciseId"] == "lat-pulldown-wide-grip")
+        assert draft["reps"] == ["10", "9", ""], draft
+        go_home(page)
+        page.get_by_role("link", name="Devam et").click()
+        expect(reps(card(page, "Lat Pulldown (wide grip)"), 2)).to_have_value("9")
+        go_home(page)
+
     def conflict_continue_and_delete(page):
         page.locator(".days a[href='#/antrenman/legs']").click()
         expect(page.get_by_role("heading", level=1)).to_have_text("Pull antrenmanı bitmedi")
@@ -688,10 +748,136 @@ def autosave_steps(run):
         ("Yazma hatası: 'Kaydedilemedi', değer ekranda; 'Tekrar dene' kaydediyor", write_error_and_retry),
         ("Hata varken 'Bitir' antrenmanı bitirmiyor; 'Tekrar dene' bitiriyor", finish_blocked_by_error),
         ("Beklemeden ekrandan çıkınca da son değer kaydediliyor", leaving_flushes),
+        ("Çıkarken başlatılan yazma başarısız: ekran kapanmıyor, soruluyor; değer duruyor, 'Tekrar dene' kaydediyor",
+         leaving_with_write_error),
         ("Başka gün açılınca soruluyor: 'Devam et' ve onaylı 'Sil'", conflict_continue_and_delete),
         ("'Bitir ve … başla': önceki antrenman bitiyor, yeni gün açılıyor", conflict_finish),
         ("Hatalı değerli antrenman oradan bitirilemiyor", conflict_finish_with_problems),
         ("'Antrenmanı iptal et' onay alıp siliyor", cancel_workout),
+    ]
+
+
+# ---------------------------------------------------------------- Bitir ve İptal sürerken ekrandan çıkış
+
+LEAVE_ANYWAY = "Son değişiklikler kaydedilemedi ve kaybolabilir. Yine de çıkmak istiyor musunuz?"
+
+
+def hold_writes(page):
+    page.evaluate(HOLD_WRITES_SCRIPT)
+
+
+def release_writes(page):
+    page.evaluate("window.__releaseWrites()")
+
+
+def leave_while_writing(page, day_name):
+    # "← Ana Sayfa": adres değişiyor, ama yazma bitene kadar antrenman ekranı açık kalıyor.
+    page.get_by_role("link", name="Ana Sayfa").click()
+    expect(page).not_to_have_url(re.compile(r"#/antrenman/"))
+    page.wait_for_timeout(300)
+    expect(page.locator(".topbar h1")).to_have_text(day_name)
+
+
+def ending_while_leaving_steps(run):
+    def finish_while_leaving(page):
+        page.goto(run.base_url + "/")
+        open_day(page, "pull", "Pull")
+        lat = card(page, "Lat Pulldown (wide grip)")
+        add_machine(lat, "Makine", "kg")
+        log_sets(lat, "40", ["10", "9"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        hold_writes(page)
+        reps(lat, 3).fill("8")  # 0,5 sn dolmadan "Bitir"
+        finish(page)
+        expect(page.get_by_role("button", name="Bitir")).to_be_disabled()
+        leave_while_writing(page, "Pull")
+        release_writes(page)
+        expect(page.locator("#flash")).to_have_text("Pull antrenmanı kaydedildi ✓")
+        expect(page.locator("#resume-title")).to_have_count(0)
+        [session] = sessions(page)
+        assert session["finishedAt"] and "draft" not in session, session
+        assert session["entries"][0]["sets"] == [
+            {"weight": 40, "reps": 10}, {"weight": 40, "reps": 9}, {"weight": 40, "reps": 8}], session["entries"]
+
+    def finish_fails_while_leaving(page):
+        open_day(page, "legs", "Legs")
+        press = card(page, "Leg Press")
+        add_machine(press, "Makine", "kg")
+        log_sets(press, "100", ["12"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        hold_writes(page)
+        page.evaluate("window.__failWritesLater = true")
+        reps(press, 2).fill("11")  # 0,5 sn dolmadan "Bitir"
+        finish(page)
+        expect(page.get_by_role("button", name="Bitir")).to_be_disabled()
+        with page.expect_event("dialog") as leaving:
+            leave_while_writing(page, "Legs")
+            release_writes(page)
+        assert leaving.value.message == LEAVE_ANYWAY, leaving.value.message
+        leaving.value.dismiss()
+        expect(page).to_have_url(re.compile(r"#/antrenman/legs$"))
+        expect(save_status(page)).to_contain_text("Antrenman bitirilemedi.")
+        expect(weight_input(press)).to_have_value("100")
+        expect(reps(press, 2)).to_have_value("11")
+        [session] = unfinished(page)
+        assert session["dayId"] == "legs", session
+        page.evaluate("window.__failWritesLater = false")
+        page.get_by_role("button", name="Tekrar dene").click()
+        expect(page.locator("#flash")).to_have_text("Legs antrenmanı kaydedildi ✓")
+        [legs] = [session for session in sessions(page) if session["dayId"] == "legs"]
+        assert legs["finishedAt"] and legs["entries"][0]["sets"] == [
+            {"weight": 100, "reps": 12}, {"weight": 100, "reps": 11}], legs["entries"]
+
+    def cancel_while_leaving(page):
+        open_day(page, "upper", "Upper")
+        incline = card(page, "Incline Dumbbell Press")
+        add_machine(incline, "Dambıl", "kg")
+        log_sets(incline, "20", ["10"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        hold_writes(page)
+        page.once("dialog", lambda dialog: dialog.accept())  # "Bu antrenman silinecek…"
+        page.get_by_role("button", name="Antrenmanı iptal et").click()
+        expect(page.get_by_role("button", name="Bitir")).to_be_disabled()
+        leave_while_writing(page, "Upper")
+        release_writes(page)
+        expect(page.locator("#flash")).to_have_text("Antrenman iptal edildi.")
+        expect(page.locator("#resume-title")).to_have_count(0)
+        assert unfinished(page) == [], "İptal edilen antrenman silinmeliydi"
+
+    def cancel_fails_while_leaving(page):
+        open_day(page, "upper", "Upper")
+        incline = card(page, "Incline Dumbbell Press")
+        log_sets(incline, "22", ["10"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        hold_writes(page)
+        page.evaluate("window.__failWritesLater = true")
+        page.once("dialog", lambda dialog: dialog.accept())  # "Bu antrenman silinecek…"
+        page.get_by_role("button", name="Antrenmanı iptal et").click()
+        expect(page.get_by_role("button", name="Bitir")).to_be_disabled()
+        with page.expect_event("dialog") as leaving:
+            leave_while_writing(page, "Upper")
+            release_writes(page)
+        assert leaving.value.message == LEAVE_ANYWAY, leaving.value.message
+        leaving.value.dismiss()
+        expect(page).to_have_url(re.compile(r"#/antrenman/upper$"))
+        expect(save_status(page)).to_contain_text("Antrenman silinemedi.")
+        expect(weight_input(incline)).to_have_value("22")
+        [session] = unfinished(page)
+        draft = next(card for card in session["draft"]["cards"] if card["exerciseId"] == "incline-dumbbell-press")
+        assert (draft["weight"], draft["reps"]) == ("22", ["10", "", ""]), draft
+        page.evaluate("window.__failWritesLater = false")
+        page.get_by_role("button", name="Tekrar dene").click()
+        expect(page.locator("#flash")).to_have_text("Antrenman iptal edildi.")
+        assert unfinished(page) == [], "İptal edilen antrenman silinmeliydi"
+
+    return [
+        ("'Bitir' yazması sürerken çıkış: ekran yazma bitene kadar açık; antrenman son değeriyle bitiyor",
+         finish_while_leaving),
+        ("'Bitir' sürerken çıkış ve gecikmeli hata: soruluyor, ekran kalıyor; değerler duruyor, 'Tekrar dene' bitiriyor",
+         finish_fails_while_leaving),
+        ("İptal yazması sürerken çıkış: ekran yazma bitene kadar açık; antrenman siliniyor", cancel_while_leaving),
+        ("İptal sürerken çıkış ve gecikmeli hata: soruluyor, ekran kalıyor; antrenman duruyor, 'Tekrar dene' siliyor",
+         cancel_fails_while_leaving),
     ]
 
 
@@ -1961,10 +2147,27 @@ def update_steps(base_url, app_copy):
         expect(reps(card(page, "Rope Pushdown"), 2)).to_have_value("11")
         assert "antrenman-test-3" in cache_names(page)
 
+    def update_after_leaving_with_error(page):
+        rope = card(page, "Rope Pushdown")
+        page.evaluate("window.__failWrites = true")
+        reps(rope, 3).fill("10")
+        expect(save_status(page)).to_contain_text("Kaydedilemedi.")
+        page.evaluate("window.__failWrites = false")
+        page.once("dialog", lambda dialog: dialog.accept())  # "Yine de çık": kaydedilemeyen değer bırakılıyor
+        page.get_by_role("link", name="Ana Sayfa").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+        bump_version("test-4")
+        check_for_update(page)
+        expect(page.locator("#update-banner")).to_be_visible()
+        with page.expect_navigation():
+            page.get_by_role("button", name="Güncelle").click()
+        assert "antrenman-test-4" in cache_names(page)
+
     return [
         ("Yeni sürüm yayınlanınca 'Yeni sürüm var: Güncelle' bandı çıkıyor", new_version_offered),
         ("'Güncelle' bekleyen kaydı önce bitiriyor, sonra yeni sürüme geçiyor", update_waits_for_pending_write),
         ("Kayıt hatası varken güncellenmiyor; kayıt tamamlanınca güncelleniyor", update_refused_on_write_error),
+        ("Kapanan ekranın eski kayıt hatası 'Güncelle'yi engellemiyor", update_after_leaving_with_error),
     ]
 
 
@@ -2540,6 +2743,8 @@ def main():
             run.flow("Uygulama gibi geçmiş ve kaydırma", history_and_swipe_steps(run), has_touch=True)
             run.flow("Push antrenmanı", push_workout_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Otomatik kaydetme ve devam eden antrenman", autosave_steps(run), init_script=FAIL_WRITES_SCRIPT)
+            run.flow("Bitir ve İptal sürerken ekrandan çıkış", ending_while_leaving_steps(run),
+                     init_script=FAIL_WRITES_LATER_SCRIPT)
             run.flow("Yedekleme", backup_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Makine silme ve ilerleme sayacı", machines_and_counter_steps(run))
             run.flow("Dönüşümlü hareket önerisi", rotation_steps(run))

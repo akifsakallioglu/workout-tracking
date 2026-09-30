@@ -4,7 +4,7 @@
 // #/program/<gün>/<satır> satır (yeni satır: #/program/<gün>/yeni), #/ayarlar ayarlar.
 // Tarayıcı geçmişi telefona yüklenen bir uygulamadaki gibi tutulur (navigate); dört ana ekranda
 // parmakla kaydırınca sekme değişir.
-import { initStore, waitForWrites } from './store.js';
+import { initStore, screenChanged, waitForWrites } from './store.js';
 import { listenForSwipes } from './swipe.js';
 import { renderHistory, renderSessionDetail } from './views/history.js';
 import { renderHome } from './views/home.js';
@@ -15,7 +15,8 @@ import { renderWorkout } from './views/workout.js';
 
 const app = document.getElementById('app');
 const TABS = ['#/', '#/gecmis', '#/ilerleme', '#/ayarlar']; // sekme sırası; kaydırma bu sırayla gezer
-let view = null; // { beforeLeave?(), flush?(), hasUnsavedChanges?(), destroy?() }
+let view = null; // { beforeLeave?(), flush?(), hasUnsavedChanges?(), destroy?() }; beforeLeave söz dönebilir
+let leaving = false; // açık ekran, çıkmadan önce yazmasının sonucunu bekliyor
 let shownHash = null;
 let shownRoute = null; // açık ekranın rotası; ana sayfa boş ve bilinmeyen adreste de '#/'
 let shownTab = null; // açık ana ekranın sekmesi; alt ekranlarda null
@@ -40,8 +41,9 @@ function navigate(hash, message = '', mode = 'push') {
   }
   flash = message;
   const from = history.state?.from ?? null;
-  if (hash === location.hash) show();
-  else if (mode === 'up' && from === hash) history.back();
+  if (hash === location.hash) {
+    if (!leaving) show(); // açık ekran yazmasını bekliyorsa yeni ekranı bekleme bitince hashchange açar
+  } else if (mode === 'up' && from === hash) history.back();
   else if (mode === 'push') location.hash = hash;
   else {
     replacing = { from };
@@ -52,6 +54,7 @@ function navigate(hash, message = '', mode = 'push') {
 async function show() {
   view?.destroy?.();
   view = null;
+  screenChanged(); // önceki ekranın başarısız yazması "Güncelle"yi artık engellemez (store.js, waitForWrites)
   // Yeni geçmiş kaydına hangi ekrandan gelindiği yazılır; geri ya da ileri ile dönülen kayıtta zaten
   // yazılıdır. Yerine geçen kayıt, eskisinin geldiği yeri devralır.
   if (history.state === null) history.replaceState({ from: replacing ? replacing.from : shownRoute }, '');
@@ -95,14 +98,23 @@ async function show() {
   else shown?.destroy?.();
 }
 
-// Ekran değişmeden önce açık ekran bekleyen değişikliğini yazar; gerekirse kullanıcıya sorar.
-window.addEventListener('hashchange', () => {
+// Ekran değişmeden önce açık ekran bekleyen değişikliğini yazar; gerekirse kullanıcıya sorar. Yazma
+// sürüyorsa beforeLeave söz döner: sonuç gelene kadar açık ekran durur, yeni ekran açılmaz.
+window.addEventListener('hashchange', async () => {
   if (location.hash === shownHash) {
     // Aşağıda geri alınan adres: yeni kayıt, açık ekranın kaydı gibi işaretlenir.
     if (history.state === null) history.replaceState({ from: shownFrom }, '');
     return;
   }
-  if (view?.beforeLeave && !view.beforeLeave()) {
+  if (leaving) return; // bekleme bitince o anki adres açılır
+  let allowed = view?.beforeLeave?.() ?? true;
+  if (allowed instanceof Promise) {
+    leaving = true;
+    allowed = await allowed;
+    leaving = false;
+    if (location.hash === shownHash) return; // beklerken açık ekranın adresine dönüldü
+  }
+  if (!allowed) {
     replacing = null;
     slide = '';
     location.hash = shownHash;

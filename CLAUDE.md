@@ -35,14 +35,15 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - "Sıradaki" kartında günün görseli: başlangıç günlerinde (`push` … `lower`) `icons/day-<gün>.png` (`dayImage`); sonradan eklenen günlerde görsel yok. Görseller `tools/render_day_images.py` ile skill'in `references/` klasöründeki kaynaklardan üretilir.
 - `js/main.js` yönlendirir: `#/` ana ekran (`views/home.js`), `#/antrenman/<gün>` antrenman ekranı (`views/workout.js`), `#/gecmis` ve `#/gecmis/<kimlik>` geçmiş listesi ve ayrıntısı (`views/history.js`), `#/gecmis/<kimlik>/duzenle` düzenleme (`views/workout.js`, düzenleme modu), `#/ilerleme` ve `#/ilerleme/<gün>/<hareket>` ilerleme listesi ve grafik (`views/progress.js`, grafik `js/chart.js`), `#/program`, `#/program/<gün>` ve `#/program/<gün>/<satır|yeni>` program düzenleyici (`views/program.js`), `#/ayarlar` ayarlar (`views/settings.js`). Kart `views/exercise-card.js` içindedir.
 - Geçmiş düzenleme: aynı kartlar; otomatik kaydetme yok, "Kaydet" ile kaydedilir, kaydedilmemiş değişiklikle çıkarken onay sorulur. "Geçen sefer", sayaç ve anlık ilerleme o antrenmandan önceki kayıtlara göredir (`before`). Tarih, gün ve hedefler kayıttaki hâliyle kalır; kaydın makinesi sonradan silindiyse "(silinmiş)" olarak seçilebilir kalır (`keepEquipmentId`). Silme onay alır.
-- Ekranlar `{ beforeLeave?, flush?, hasUnsavedChanges?, destroy? }` döndürür; `main.js` ekran değişmeden önce `beforeLeave`, sayfa kapanırken `flush` ve `hasUnsavedChanges` çağırır.
+- Ekranlar `{ beforeLeave?, flush?, hasUnsavedChanges?, destroy? }` döndürür; `main.js` ekran değişmeden önce `beforeLeave` (söz dönebilir; beklerken yeni ekran açılmaz), sayfa kapanırken `flush` ve `hasUnsavedChanges` çağırır.
 - Devam eden antrenman, ilk değer girilince `finishedAt: null` ve `draft.cards` (ham kutu değerleri, seçili hareket ve makine, başlarken kopyalanan hedef) ile kaydedilir. "Bitir" aynı kaydı `entries` ile bitmiş hâle getirir, "İptal" siler. Aynı anda tek devam eden antrenman olur; başka gün açılınca "devam et / bitir / sil" ekranı çıkar.
 
 ## Kaydetme
 - Tüm yazmalar tek sıradan geçer. Durumlar: Kaydediliyor… / Kaydedildi ✓ / Kaydedilemedi (Tekrar dene). Henüz yazılmaya başlanmamış (beklemedeki) değişiklik de "Kaydediliyor…" sayılır.
 - Zamanlama: yazarken 0,5 sn bekleyip; kutudan çıkınca, set/makine değişince, ekrandan çıkınca ve uygulama arka plana geçince hemen.
 - Okumalar (`loadProgram`, `loadSessions`) sıradaki yazmaların bitmesini bekler; ekranlar daha önce istenen bütün değişiklikleri görür.
-- "Bitir" ve "Güncelle" bekleyen yazmaları bekler; hata varsa işlemi yapmaz.
+- "Bitir" ve "Güncelle" bekleyen yazmaları bekler; hata varsa işlemi yapmaz. "Güncelle"yi yalnızca açık ekranda istenen başarısız yazma engeller; kapanan ekranın eski hatası engellemez, kaydedilemeyen değerler o ekranla gitti (`screenChanged`, `waitForWrites`).
+- Antrenman ekranından çıkış da yazmanın sonucunu bekler; o sırada ekran açık kalır. Yazma başarısızsa "Yine de çıkmak istiyor musunuz?" sorulur; "İptal"de ekranda kalınır, değerler durur ve "Tekrar dene" ile kaydedilir.
 - Kayıpsızlık garantisi verilmez; arayüzde de verilmez.
 
 ## İnternetsiz çalışma (PWA)
@@ -60,6 +61,7 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 
 ## Testler
 - Birim testleri: `tests/logic.test.js`, tarayıcıda http://127.0.0.1:8000/tests/ adresinde çalışır. Saf fonksiyonlar `js/logic.js` içindedir.
+- Yazma hataları uçtan uca testte taklit edilir: `FAIL_WRITES_SCRIPT` hemen, `FAIL_WRITES_LATER_SCRIPT` işlem çalışınca (gecikmeli) hata verir. `HOLD_WRITES_SCRIPT` yazmaları `__releaseWrites()` çağrılana kadar bekletir (yazma sürerken yapılanları sınamak için).
 - Uçtan uca: `.venv\Scripts\python tests\e2e.py`. Kendi sunucusunu açar ve kurulu Chrome'u 390×844 boyutunda kullanır. Ekran görüntüleri `tests/artifacts/` klasörüne gider (git'e eklenmez). "Tasarım" akışı ana ve alt ekranlarda 390 ve 320 px'te yatay taşmayı ve 44 px'ten küçük dokunma alanını denetler; yeni ekran ya da form eklenince oraya da eklenir.
 - Sanal ortam yoksa: `python -m venv .venv` ve `.venv\Scripts\python -m pip install playwright`. Tarayıcı indirmeye gerek yok (`channel="chrome"`).
 

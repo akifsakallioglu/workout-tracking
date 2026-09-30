@@ -7,6 +7,7 @@ let db = null;
 let queue = Promise.resolve();
 let pending = 0;
 let status = { state: 'idle', error: null }; // idle | saving | saved | error
+let screen = 0; // açık ekranın sırası; başarısız yazma hangi ekranda istendiğini taşır
 const listeners = new Set();
 
 export async function initStore() {
@@ -53,10 +54,17 @@ export function hasPendingWrites() {
   return pending > 0;
 }
 
-// Sıradaki bütün yazmaların bitmesini bekler; son yazma başarılıysa true.
+// Sıradaki bütün yazmaların bitmesini bekler. Son yazma başarılıysa ya da başarısız yazma önceki bir
+// ekranda istendiyse true: o ekranın kaydedilemeyen değerleri ekranla birlikte gitti (antrenman
+// ekranı çıkmadan önce sorar), beklemek onları geri getirmez.
 export async function waitForWrites() {
   await queue;
-  return status.state !== 'error';
+  return status.state !== 'error' || status.screen !== screen;
+}
+
+// Ekran değişti (main.js, show).
+export function screenChanged() {
+  screen++;
 }
 
 // Ayarlar (bu cihaza özel, yedeğe girmez): { lastBackupAt }
@@ -98,6 +106,7 @@ function enqueue(write) {
 // Kullanıcının yaptığı değişikliklerin yazması: kayıt durumu güncellenir. "Kaydedildi" durumu
 // sıradaki bütün yazmalar bitince gelir; bir yazma başarısız olursa durum "error" olur.
 function trackedWrite(write) {
+  const requestedOn = screen;
   pending++;
   setStatus({ state: 'saving', error: null });
   return enqueue(write).then(
@@ -107,7 +116,7 @@ function trackedWrite(write) {
     },
     (error) => {
       pending--;
-      setStatus({ state: 'error', error });
+      setStatus({ state: 'error', error, screen: requestedOn });
       throw error;
     },
   );
