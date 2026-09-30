@@ -28,7 +28,9 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Grafik ölçüleri birime göre: kg → Tahmini 1TM (en iyi set, Epley `w × (1 + tekrar/30)`, tek tekrarda `w`), En ağır, Hacim (Σ kg × tekrar); kademe → En yüksek kademe, Toplam tekrar; ağırlıksız → Toplam tekrar, En çok tekrar. Değerler bir ondalığa yuvarlanır.
 
 ## Ekranlar
-- Renkler uygulama simgesinden gelir (koyu yeşil `#034425`, krem `#faf1e1`, turuncu `#f06b29`); hepsi `css/app.css` başındaki değişkenlerde, açık ve koyu tema için ayrı. Yazı renkleri zemine karşı en az 4,5:1 karşıtlıkta seçilir.
+- Arayüz yalnızca koyu temadır: antrasit zemin, sınırlı turuncu vurgu (`#f06b29`, simgedeki ton). Renk, yazı boyutu, boşluk ve köşe değerleri `css/app.css` başındaki değişkenlerdedir; yazı renkleri zemine karşı en az 4,5:1, dokunma alanları en az 44 px. Tasarım kuralları ve kararlar `.claude/skills/workout-ui` skill'indedir (arayüz işlerinde yüklenir).
+- Ana gezinme: Ana Sayfa · Geçmiş · İlerleme · Ayarlar sekmeleri (`appHeader`, `js/ui.js`); açık ekranın sekmesi `aria-current="page"` taşır. Diğer ekranlarda sekme yok, geri bağlantısı var ("← Ana Sayfa", "← Program", "← <gün>").
+- "Sıradaki" kartında günün görseli: başlangıç günlerinde (`push` … `lower`) `icons/day-<gün>.png` (`dayImage`); sonradan eklenen günlerde görsel yok. Görseller `tools/render_day_images.py` ile skill'in `references/` klasöründeki kaynaklardan üretilir.
 - `js/main.js` yönlendirir: `#/` ana ekran (`views/home.js`), `#/antrenman/<gün>` antrenman ekranı (`views/workout.js`), `#/gecmis` ve `#/gecmis/<kimlik>` geçmiş listesi ve ayrıntısı (`views/history.js`), `#/gecmis/<kimlik>/duzenle` düzenleme (`views/workout.js`, düzenleme modu), `#/ilerleme` ve `#/ilerleme/<gün>/<hareket>` ilerleme listesi ve grafik (`views/progress.js`, grafik `js/chart.js`), `#/program`, `#/program/<gün>` ve `#/program/<gün>/<satır|yeni>` program düzenleyici (`views/program.js`), `#/ayarlar` ayarlar (`views/settings.js`). Kart `views/exercise-card.js` içindedir.
 - Geçmiş düzenleme: aynı kartlar; otomatik kaydetme yok, "Kaydet" ile kaydedilir, kaydedilmemiş değişiklikle çıkarken onay sorulur. "Geçen sefer", sayaç ve anlık ilerleme o antrenmandan önceki kayıtlara göredir (`before`). Tarih, gün ve hedefler kayıttaki hâliyle kalır; kaydın makinesi sonradan silindiyse "(silinmiş)" olarak seçilebilir kalır (`keepEquipmentId`). Silme onay alır.
 - Ekranlar `{ beforeLeave?, flush?, hasUnsavedChanges?, destroy? }` döndürür; `main.js` ekran değişmeden önce `beforeLeave`, sayfa kapanırken `flush` ve `hasUnsavedChanges` çağırır.
@@ -56,7 +58,7 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 
 ## Testler
 - Birim testleri: `tests/logic.test.js`, tarayıcıda http://127.0.0.1:8000/tests/ adresinde çalışır. Saf fonksiyonlar `js/logic.js` içindedir.
-- Uçtan uca: `.venv\Scripts\python tests\e2e.py`. Kendi sunucusunu açar ve kurulu Chrome'u 390×844 boyutunda kullanır. Ekran görüntüleri `tests/artifacts/` klasörüne gider (git'e eklenmez).
+- Uçtan uca: `.venv\Scripts\python tests\e2e.py`. Kendi sunucusunu açar ve kurulu Chrome'u 390×844 boyutunda kullanır. Ekran görüntüleri `tests/artifacts/` klasörüne gider (git'e eklenmez). "Tasarım" akışı ana ve alt ekranlarda 390 ve 320 px'te yatay taşmayı ve 44 px'ten küçük dokunma alanını denetler; yeni ekran ya da form eklenince oraya da eklenir.
 - Sanal ortam yoksa: `python -m venv .venv` ve `.venv\Scripts\python -m pip install playwright`. Tarayıcı indirmeye gerek yok (`channel="chrome"`).
 
 ## Çalışma şekli
@@ -65,4 +67,4 @@ Onaylı ayrıntılı plan: [docs/plan.md](docs/plan.md). Aşamaların kapsamı v
 - Yeni kararlar bu dosyaya işlenir.
 
 ## Aşamalar
-0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma ✓ (telefonda uçak modu denemesi kullanıcıda) · 6 İlerleme sayacı ✓ (makine silme ve yeni simge de) · 7 Dönüşümlü hareket önerisi ✓ · 8 Geçmiş ve düzeltme ✓ · 9 Grafikler ✓ · 10a Program düzenleyici ✓ · 10b Makine yönetimi ve "+ Hareket ekle" ✓
+0 Kurulum ✓ · 1 İlk dilim (Push · Rope Pushdown, iki makine) ✓ · 2 Tüm program ve makine ekleme ✓ · 3 Otomatik kaydetme ve devam eden antrenman ✓ · 4 Yedekleme ✓ · 5 PWA ve yayına alma ✓ (telefonda uçak modu denemesi kullanıcıda) · 6 İlerleme sayacı ✓ (makine silme ve yeni simge de) · 7 Dönüşümlü hareket önerisi ✓ · 8 Geçmiş ve düzeltme ✓ · 9 Grafikler ✓ · 10a Program düzenleyici ✓ · 10b Makine yönetimi ve "+ Hareket ekle" ✓ · 11a Arayüz: tasarım değişkenleri, koyu tema, sekmeler, Ana Sayfa ✓ · 11b Arayüz: diğer ekranların düzeni

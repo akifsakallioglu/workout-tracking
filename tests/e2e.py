@@ -159,7 +159,7 @@ def open_day(page, day_id, day_name):
 
 
 def go_home(page):
-    page.get_by_role("link", name="← Günler").click()
+    page.get_by_role("link", name="Ana Sayfa").click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
 
 
@@ -285,10 +285,7 @@ def program_steps(run):
             "6 hareket · henüz yapılmadı",
             "6 hareket · henüz yapılmadı",
         ])
-        page.screenshot(path=str(ARTIFACTS / "asama2-ana-ekran-acik.png"), full_page=True)
-        page.emulate_media(color_scheme="dark")
-        page.screenshot(path=str(ARTIFACTS / "asama2-ana-ekran-koyu.png"), full_page=True)
-        page.emulate_media(color_scheme="light")
+        page.screenshot(path=str(ARTIFACTS / "asama2-ana-ekran.png"), full_page=True)
 
     def push_cards(page):
         open_day(page, "push", "Push")
@@ -505,7 +502,7 @@ def push_workout_steps(run):
         reps(card(page, "Cable Fly"), 1).fill("12")
         dialogs = []
         page.on("dialog", lambda dialog: (dialogs.append(dialog.message), dialog.dismiss()))
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         expect(page.locator("#resume-title")).to_have_text("Push")
         assert not dialogs, f"Çıkarken onay sorulmamalıydı: {dialogs}"
         page.get_by_role("link", name="Devam et").click()
@@ -529,9 +526,7 @@ def push_workout_steps(run):
     def screenshots(page):
         page.evaluate("window.scrollTo(0, 0)")
         page.screenshot(path=str(ARTIFACTS / "asama2-antrenman-ust.png"))
-        page.screenshot(path=str(ARTIFACTS / "asama2-antrenman-acik.png"), full_page=True)
-        page.emulate_media(color_scheme="dark")
-        page.screenshot(path=str(ARTIFACTS / "asama2-antrenman-koyu.png"), full_page=True)
+        page.screenshot(path=str(ARTIFACTS / "asama2-antrenman.png"), full_page=True)
 
     return [
         ("Makineler elle ekleniyor ve sayfa yenilense de kayıtlı kalıyor", machines_added_and_saved),
@@ -543,7 +538,7 @@ def push_workout_steps(run):
         ("Yeniden açınca son kullanılan makine seçili, 'Geçen sefer' ve ipuçları görünüyor", reopen_shows_last_time),
         ("Çıkınca değerler kaydediliyor; 'Devam et' ile geri geliyor", leaving_keeps_values),
         ("Makine eklerken yazma hatası: form kalıyor; 'Tekrar dene' ekliyor", machine_error_and_retry),
-        ("Açık ve koyu tema ekran görüntüleri", screenshots),
+        ("Antrenman ekranının görüntüleri", screenshots),
     ]
 
 
@@ -627,7 +622,7 @@ def autosave_steps(run):
         add_machine(lat, "Makine", "kg")
         expect(save_status(page)).to_have_text("Makine eklendi ✓")
         log_sets(lat, "40", ["10"])
-        page.get_by_role("link", name="← Günler").click()  # 0,5 sn beklemeden çıkılıyor
+        page.get_by_role("link", name="Ana Sayfa").click()  # 0,5 sn beklemeden çıkılıyor
         expect(page.locator("#resume-title")).to_have_text("Pull")
         page.get_by_role("link", name="Devam et").click()
         lat = card(page, "Lat Pulldown (wide grip)")
@@ -769,7 +764,7 @@ def backup_steps(run):
         page.screenshot(path=str(ARTIFACTS / "asama4-ayarlar.png"), full_page=True)
 
     def change_data(page):
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         page.get_by_role("link", name="Devam et").click()
         page.once("dialog", lambda dialog: dialog.accept())
         page.get_by_role("button", name="Antrenmanı iptal et").click()
@@ -814,7 +809,7 @@ def backup_steps(run):
         page.get_by_role("button", name="Geri yükle").click()
         expect(page.locator("#restore-message")).to_have_text("Yedek geri yüklendi: 2 antrenman.")
         assert snapshot(page) == state["exported"], "Geri yüklenen veri yedekle aynı olmalı"
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         expect(page.locator("#resume-title")).to_have_text("Pull")
         page.get_by_role("link", name="Devam et").click()
         lat = card(page, "Lat Pulldown (wide grip)")
@@ -1147,7 +1142,7 @@ def history_steps(run):
 
     def correction_updates_today(page):
         page.get_by_role("link", name="← Geçmiş").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         open_day(page, "push", "Push")
         rope = card(page, "Rope Pushdown")
         expect(last_time(rope)).to_contain_text("40 kg × 12 · 12 · 10")
@@ -1348,9 +1343,6 @@ def progress_steps(run):
         tap_point(page, 0)
         page.evaluate("document.activeElement.blur()")
         page.screenshot(path=str(ARTIFACTS / "asama9-grafik.png"), full_page=True)
-        page.emulate_media(color_scheme="dark")
-        page.screenshot(path=str(ARTIFACTS / "asama9-grafik-koyu.png"), full_page=True)
-        page.emulate_media(color_scheme="light")
 
     def bodyweight_chart(page):
         page.get_by_role("link", name="← İlerleme").click()
@@ -1447,7 +1439,7 @@ def program_editor_steps(run):
         expect(program_rows(page).nth(4)).to_contain_text("Arms")
         expect(page.get_by_role("button", name="Arms: yukarı taşı")).to_be_focused()
         expect(page.locator(".program-list .program-link .day-name")).to_have_text(["Push", "Pull", "Legs", "Upper", "Arms", "Lower"])
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         expect(page.locator(".days .day-name")).to_have_text(["Push", "Pull", "Legs", "Upper", "Arms", "Lower"])
         expect(page.locator(".days .day").filter(has_text="Arms").locator(".muted")).to_have_text("0 hareket · henüz yapılmadı")
 
@@ -1504,7 +1496,7 @@ def program_editor_steps(run):
 
     def workout_uses_new_rows(page):
         page.get_by_role("link", name="← Program").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         page.locator(".days .day").filter(has_text="Arms").click()
         expect(page.locator(".topbar h1")).to_have_text("Arms")
         expect(page.locator("[data-card] h2")).to_have_text(["Wrist Curl / Reverse Curl", "Cable Curl"])
@@ -1530,7 +1522,7 @@ def program_editor_steps(run):
         save_item(page)
         expect(program_rows(page).filter(has_text="Rope Pushdown").locator(".muted")).to_have_text("Hedef 4 × 12")
         page.get_by_role("link", name="← Program").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         open_day(page, "push", "Push")
         rope = card(page, "Rope Pushdown")
         expect(rope.locator(".target")).to_have_text("Hedef 4 × 12")
@@ -1541,7 +1533,7 @@ def program_editor_steps(run):
         history_rows(page).first.click()
         expect(page.locator(".entry .muted")).to_have_text("Hedef 3 × 15")
         page.get_by_role("link", name="← Geçmiş").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
 
     def rename_keeps_history(page):
         open_program_row(page, "Push", "Rope Pushdown")
@@ -1559,7 +1551,7 @@ def program_editor_steps(run):
         page.get_by_role("link", name="Vazgeç").click()  # satırda değişiklik yok: onay sorulmaz
         expect(program_rows(page).filter(has_text="Triceps Rope Pushdown")).to_have_count(1)
         page.get_by_role("link", name="← Program").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         open_day(page, "push", "Push")
         rope = card(page, "Triceps Rope Pushdown")
         expect(radio(rope, "Kablo · kg")).to_be_checked()
@@ -1569,10 +1561,10 @@ def program_editor_steps(run):
         history_rows(page).first.click()
         expect(page.locator(".entry h2")).to_have_text("Rope Pushdown · Kablo")  # kayıt, antrenmandaki adı taşır
         page.get_by_role("link", name="← Geçmiş").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         page.get_by_role("link", name="İlerleme").click()
         expect(page.locator(".days .day-name")).to_have_text(["Triceps Rope Pushdown"])
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
 
     def delete_row_and_day(page):
         open_program_row(page, "Arms", "Cable Curl")
@@ -1585,7 +1577,7 @@ def program_editor_steps(run):
         expect(program_rows(page)).to_have_count(1)
 
         page.get_by_role("link", name="← Program").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         page.locator(".days .day").filter(has_text="Arms").click()
         wrist = card(page, "Wrist Curl / Reverse Curl")
         add_machine(wrist, "Dambıl", "kg")
@@ -1601,7 +1593,7 @@ def program_editor_steps(run):
         page.get_by_role("button", name="Günü sil").click()
         expect(page.locator("#day-message")).to_have_text("Bu günün devam eden antrenmanı var. Önce antrenmanı bitirin ya da silin.")
         page.get_by_role("link", name="← Program").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         page.get_by_role("link", name="Devam et").click()
         finish(page)
         expect(page.locator("#flash")).to_have_text("Arms antrenmanı kaydedildi ✓")
@@ -1618,11 +1610,11 @@ def program_editor_steps(run):
         expect(page.locator("#flash")).to_have_text('"Arms" günü silindi.')
         expect(page.locator(".program-list .program-link .day-name")).to_have_text(["Push", "Pull", "Legs", "Upper", "Lower"])
         assert len(sessions(page)) == 2, "Silinen günün kaydı durmalı"
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         page.get_by_role("link", name="İlerleme").click()
         other = page.locator(".days .day").filter(has_text="Wrist Curl")
         expect(other.locator(".muted")).to_contain_text("Arms · 1 antrenman")
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
 
     def reset_program(page):
         open_program(page)
@@ -1642,16 +1634,14 @@ def program_editor_steps(run):
         assert [equipment["name"] for equipment in rope["equipment"]] == ["Kablo"], rope
         assert saved["exercises"]["wrist-curl"]["equipment"][0]["name"] == "Dambıl"
         assert any(exercise["name"] == "Cable Curl" for exercise in saved["exercises"].values())
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
         open_day(page, "push", "Push")
         rope_card = card(page, "Rope Pushdown")
         expect(rope_card.locator(".target")).to_have_text("Hedef 3 × 15")
         expect(last_time(rope_card)).to_contain_text("40 kg × 12 · 12 · 12")
         go_home(page)
-        page.emulate_media(color_scheme="dark")
         open_program(page)
-        page.screenshot(path=str(ARTIFACTS / "asama10-program-koyu.png"), full_page=True)
-        page.emulate_media(color_scheme="light")
+        page.screenshot(path=str(ARTIFACTS / "asama10-program-sifirlandi.png"), full_page=True)
 
     return [
         ("Program ekranı: günler sırasıyla; baştaki ve sondaki taşıma düğmesi kapalı", program_screen),
@@ -1714,7 +1704,7 @@ def machine_management_steps(run):
         history_rows(page).first.click()
         expect(page.locator(".entry h2")).to_have_text("Rope Pushdown · Kablo")  # kayıt, antrenmandaki adı taşır
         page.get_by_role("link", name="← Geçmiş").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
 
     def change_unit_of_unused(page):
         open_day(page, "push", "Push")
@@ -1830,7 +1820,7 @@ def machine_management_steps(run):
         page.get_by_role("link", name="İlerleme").click()
         other = page.locator(".days .day").filter(has_text="Hammer Curl")
         expect(other.locator(".muted")).to_contain_text("Pull · 1 antrenman")
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
 
     def add_exercise_while_editing_history(page):
         page.get_by_role("link", name="Geçmiş").click()
@@ -1848,7 +1838,7 @@ def machine_management_steps(run):
         expect(page.locator("#flash")).to_have_text("Değişiklikler kaydedildi ✓")
         expect(page.locator(".entry h2")).to_have_text(["Hammer Curl · Dambıl", "Cable Row · Kablo"])
         page.get_by_role("link", name="← Geçmiş").click()
-        page.get_by_role("link", name="← Günler").click()
+        page.get_by_role("link", name="Ana Sayfa").click()
 
     def row_editor_lists_machines(page):
         page.get_by_role("link", name="Programı düzenle").click()
@@ -2206,6 +2196,180 @@ def phase2_upgrade_steps(run):
     ]
 
 
+# ---------------------------------------------------------------- Tasarım: sekmeler, ana sayfa, telefon ekranı
+
+# Görünür denetimlerden 44 px'ten küçük olanlar (paragraf içindeki metin bağlantıları hariç).
+SMALL_TARGETS_SCRIPT = """
+() => [...document.querySelectorAll('a, button, select, input:not([type=radio]), label.chip')]
+  .filter((el) => el.getClientRects().length && !el.closest('p'))
+  .map((el) => [el, el.getBoundingClientRect()])
+  .filter(([, box]) => box.height < 44 || box.width < 44)
+  .map(([el, box]) => `${el.outerHTML.slice(0, 80)} → ${Math.round(box.width)}×${Math.round(box.height)}`)
+"""
+
+# Sayfanın ve sekme çubuğunun yatay taşması (piksel; 0 ya da eksi değer taşma yok demek).
+OVERFLOW_SCRIPT = """
+() => {
+  const tabs = document.querySelector('.tabs');
+  return {
+    page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    tabs: tabs ? tabs.scrollWidth - tabs.clientWidth : 0,
+  };
+}
+"""
+
+# (adres, sekme, h1)
+MAIN_SCREENS = [
+    ("#/", "Ana Sayfa", "Antrenman Takibi"),
+    ("#/gecmis", "Geçmiş", "Geçmiş"),
+    ("#/ilerleme", "İlerleme", "İlerleme"),
+    ("#/ayarlar", "Ayarlar", "Ayarlar"),
+]
+
+
+def current_tab(page):
+    return page.locator("nav[aria-label='Ana gezinme'] [aria-current='page']")
+
+
+def design_steps(run):
+    def dark_theme_only(page):
+        page.goto(run.base_url + "/")  # tarayıcı açık temada açılıyor (color_scheme="light")
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+        background = page.evaluate("getComputedStyle(document.body).backgroundColor")
+        assert background == "rgb(23, 25, 28)", background
+        assert page.get_attribute("meta[name='theme-color']", "content") == "#17191c"
+
+    def tabs_mark_open_screen(page):
+        for _, tab, heading in MAIN_SCREENS:
+            page.get_by_role("link", name=tab, exact=True).click()
+            expect(page.get_by_role("heading", level=1)).to_have_text(heading)
+            expect(current_tab(page)).to_have_count(1)
+            expect(current_tab(page)).to_have_text(tab)
+            expect(page.locator(".back")).to_have_count(0)
+        page.goto(run.base_url + "/#/bilinmeyen")  # bilinmeyen adreste de ana sayfa açılır
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+        expect(current_tab(page)).to_have_text("Ana Sayfa")
+
+    def sub_screens_have_back_links(page):
+        open_program(page)
+        expect(page.locator(".tabs")).to_have_count(0)
+        page.get_by_role("link", name="← Ana Sayfa").click()
+        expect(current_tab(page)).to_have_text("Ana Sayfa")
+        open_day(page, "push", "Push")
+        expect(page.locator(".tabs")).to_have_count(0)
+        expect(page.get_by_role("link", name="← Ana Sayfa")).to_be_visible()
+        go_home(page)
+
+    def next_card_shows_day_image(page):
+        image = page.locator(".next img.day-art")
+        expect(image).to_have_attribute("src", "icons/day-push.png")
+        expect(image).to_have_attribute("alt", "")
+        page.wait_for_function("() => document.querySelector('.next img.day-art').naturalWidth === 264")
+        expect(page.locator(".days .day .icon")).to_have_count(5)  # her günün sağında ok
+
+    def keyboard_focus_visible(page):
+        page.goto(run.base_url + "/")
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+        page.keyboard.press("Tab")
+        focused = page.evaluate("""() => {
+          const el = document.activeElement;
+          const style = getComputedStyle(el);
+          return { text: el.textContent, style: style.outlineStyle, color: style.outlineColor, width: style.outlineWidth };
+        }""")
+        assert focused == {"text": "Ana Sayfa", "style": "solid", "color": "rgb(240, 107, 41)", "width": "2px"}, focused
+
+    def fits_phone_widths(page):
+        for width in (390, 320):
+            page.set_viewport_size({"width": width, "height": 844})
+            for address, tab, heading in MAIN_SCREENS:
+                page.goto(f"{run.base_url}/{address}")
+                expect(page.get_by_role("heading", level=1)).to_have_text(heading)
+                overflow = page.evaluate(OVERFLOW_SCRIPT)
+                assert overflow["page"] <= 0 and overflow["tabs"] <= 0, f"{width} px, {tab}: yatay taşma {overflow}"
+                small = page.evaluate(SMALL_TARGETS_SCRIPT)
+                assert not small, f"{width} px, {tab}: 44 px'ten küçük dokunma alanı: {small}"
+            if width == 320:
+                page.goto(run.base_url + "/")
+                expect(page.locator("#next-title")).to_have_text("Push")
+                page.screenshot(path=str(ARTIFACTS / "asama11-ana-sayfa-320.png"), full_page=True)
+        page.set_viewport_size(PHONE)
+        page.goto(run.base_url + "/")
+        expect(page.locator("#next-title")).to_have_text("Push")
+        page.screenshot(path=str(ARTIFACTS / "asama11-ana-sayfa.png"), full_page=True)
+        return "390 ve 320 px"
+
+    def sub_screens_fit_phone_widths(page):
+        # Veri: uzun adlı bir makine ve bitmiş bir Push antrenmanı.
+        page.goto(run.base_url + "/#/antrenman/push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo makinesi uzun adlı bir istasyon 12", "kg")
+        log_sets(rope, "40", ["12", "11", "10"])
+        finish(page)
+        expect(page.locator("#flash")).to_be_visible()
+        session_id = sessions(page)[0]["id"]
+        pull = next(day for day in stored_program(page)["days"] if day["id"] == "pull")
+        rotation_item = next(item for item in pull["items"] if len(item["options"]) > 1)["id"]
+        problems = []
+
+        def check(label):
+            overflow = page.evaluate(OVERFLOW_SCRIPT)
+            small = page.evaluate(SMALL_TARGETS_SCRIPT)
+            width = page.viewport_size["width"]
+            if overflow["page"] > 0 or overflow["tabs"] > 0:
+                problems.append(f"{width} px, {label}: yatay taşma {overflow}")
+            if small:
+                problems.append(f"{width} px, {label}: 44 px'ten küçük dokunma alanı {small}")
+
+        for width in (320, 390):
+            page.set_viewport_size({"width": width, "height": 844})
+            page.goto(run.base_url + "/#/antrenman/push")
+            rope = card(page, "Rope Pushdown")
+            rope.get_by_role("button", name="Düzenle").click()
+            expect(rope.locator(".machine-list li")).to_have_count(1)
+            check("antrenman, makine listesi")
+            rope.get_by_role("button", name="Bitti").click()
+            card(page, "Cable Fly").get_by_role("button", name="+ Makine").click()
+            check("antrenman, makine formu")
+            card(page, "Cable Fly").get_by_role("button", name="Vazgeç").click()
+            page.get_by_role("button", name="+ Hareket ekle").click()
+            check("antrenman, hareket ekleme formu")
+            page.get_by_role("button", name="Vazgeç").click()
+            page.goto(f"{run.base_url}/#/gecmis/{session_id}")
+            expect(page.locator(".entry")).to_have_count(1)
+            check("geçmiş ayrıntısı")
+            page.goto(f"{run.base_url}/#/gecmis/{session_id}/duzenle")
+            expect(page.locator(".topbar h1")).to_contain_text("Push · ")
+            check("geçmiş düzenleme")
+            page.goto(run.base_url + "/#/ilerleme/push/rope-pushdown")
+            expect(page.locator(".readout-value")).to_be_visible()
+            check("ilerleme grafiği")
+            page.goto(run.base_url + "/#/program")
+            page.get_by_role("button", name="+ Gün ekle").click()
+            check("program, gün formu")
+            page.goto(run.base_url + "/#/program/pull")
+            expect(page.get_by_role("heading", level=1)).to_have_text("Pull")
+            check("gün")
+            page.goto(f"{run.base_url}/#/program/pull/{rotation_item}")
+            page.get_by_role("button", name="Adı düzelt").first.click()
+            check("satır, ad düzeltme")
+            page.goto(run.base_url + "/#/antrenman/pull")
+            expect(page.locator(".topbar h1")).to_have_text("Pull")
+            check("antrenman, dönüşümlü satır")
+        page.set_viewport_size(PHONE)
+        assert not problems, "\n".join(problems)
+        return "11 ekran durumu, 390 ve 320 px"
+
+    return [
+        ("Yalnızca koyu tema: telefon açık temadayken de zemin antrasit", dark_theme_only),
+        ("Sekmeler açık ekranı gösteriyor; bilinmeyen adreste Ana Sayfa seçili", tabs_mark_open_screen),
+        ("Alt ekranlarda sekme yok, \"← Ana Sayfa\" var", sub_screens_have_back_links),
+        ("Sıradaki kartında günün görseli; gün listesinde oklar", next_card_shows_day_image),
+        ("Klavyeyle ilk odak sekmede ve odak halkası görünüyor", keyboard_focus_visible),
+        ("Ana ekranlar 390 ve 320 px'te taşmıyor; dokunma alanları en az 44 px", fits_phone_widths),
+        ("Alt ekranlar ve formlar da 390 ve 320 px'te taşmıyor; dokunma alanları en az 44 px", sub_screens_fit_phone_widths),
+    ]
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -2225,6 +2389,7 @@ def main():
             run = Runner(browser, base_url)
             run.flow("Altyapı", infrastructure_steps(run))
             run.flow("Ana ekran ve program", program_steps(run))
+            run.flow("Tasarım: sekmeler, ana sayfa, telefon ekranı", design_steps(run))
             run.flow("Push antrenmanı", push_workout_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Otomatik kaydetme ve devam eden antrenman", autosave_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Yedekleme", backup_steps(run), init_script=FAIL_WRITES_SCRIPT)

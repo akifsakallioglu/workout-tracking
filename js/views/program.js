@@ -36,7 +36,7 @@ export async function renderProgram(container, { navigate, flash }) {
     const { program, busy } = state;
     container.innerHTML = `
       <header class="page-head">
-        <a class="back" href="#/">← Günler</a>
+        <a class="back" href="#/">← Ana Sayfa</a>
         <h1>Program</h1>
         <p class="muted">Günlerin sırası "Sıradaki" gününün sırasıdır.</p>
       </header>
@@ -65,7 +65,7 @@ export async function renderProgram(container, { navigate, flash }) {
           </div>
         </form>` : `
         <div class="actions">
-          <button type="button" class="button secondary" data-action="open-day-form">+ Gün ekle</button>
+          <button type="button" class="button add" data-action="open-day-form">+ Gün ekle</button>
         </div>`}
       <p id="program-message" class="message" role="alert">${escapeHtml(state.message)}</p>
       <section class="card reset-section" aria-labelledby="reset-title">
@@ -183,7 +183,7 @@ export async function renderDayEditor(container, { dayId, navigate, flash }) {
             </li>`).join('')}
         </ol>` : '<p class="muted empty-state">Bu günde henüz satır yok.</p>'}
       <div class="actions">
-        <a class="button secondary" href="#/program/${escapeHtml(dayId)}/yeni">+ Satır ekle</a>
+        <a class="button add" href="#/program/${escapeHtml(dayId)}/yeni">+ Satır ekle</a>
       </div>
       <p id="day-message" class="message" role="alert">${escapeHtml(state.message)}</p>
       <div class="page-actions">

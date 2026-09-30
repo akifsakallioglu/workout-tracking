@@ -1,7 +1,7 @@
 // Service worker: uygulama dosyalarını telefonda saklar; uygulama internetsiz de açılır.
 // Her yayında VERSION artırılır. Yeni bir dosya eklenince FILES listesine de yazılır
 // (uçtan uca test, listede eksik dosya kalmadığını denetler).
-const VERSION = '9';
+const VERSION = '10';
 const CACHE = `antrenman-${VERSION}`;
 const FILES = [
   './',
@@ -23,6 +23,11 @@ const FILES = [
   'js/views/settings.js',
   'js/views/workout.js',
   'icons/apple-touch-icon.png',
+  'icons/day-legs.png',
+  'icons/day-lower.png',
+  'icons/day-pull.png',
+  'icons/day-push.png',
+  'icons/day-upper.png',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',

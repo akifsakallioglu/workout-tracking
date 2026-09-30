@@ -176,7 +176,7 @@ Biçim ve kullanım ayrıntıları:
   - ağırlıksız: "15 · 14"
 - **Ondalık:** ağırlık kutusu hem virgülü hem noktayı kabul eder.
 - **Yazı boyutu:** iPhone'un kutuya dokununca ekranı yakınlaştırmaması için kutulardaki yazı en az 16px'tir.
-- **Görünüm:** dokunma alanları büyüktür. Açık ya da koyu tema telefonun ayarına uyar.
+- **Görünüm:** dokunma alanları büyüktür (en az 44 px). Aşama 11'den beri yalnızca koyu tema: antrasit zemin, turuncu vurgu. Ayrıntılar `workout-ui` skill'inde.
 - **Metin güvenliği:** kullanıcının yazdığı metinler sayfaya kod olarak değil, düz metin olarak basılır.
 
 Hedef dosya yapısı:
@@ -326,6 +326,16 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
   - Hedef değişince yeni antrenman yeni hedefle başlıyor, eski kayıtlar eski hedefi gösteriyor.
   - Adı değişen hareketin ya da makinenin geçmişi kopmuyor.
   - Arşivlenen makine seçim listesinden kalkıyor ama geçmişte görünmeye devam ediyor.
+
+**Aşama 11: Arayüz yenilemesi**
+- Kullanıcının iki tasarım görseline göre görsel yenileme; davranış ve veri değişmez. Kurallar, görseller ve kullanıcının kararları `.claude/skills/workout-ui` skill'indedir.
+- Aşama ikiye bölündü:
+  - **11a:** tasarım değişkenleri ve yalnızca koyu tema; Ana Sayfa · Geçmiş · İlerleme · Ayarlar sekmeleri ve alt ekranlarda "← Ana Sayfa" gibi geri bağlantıları; "Sıradaki" kartında günün görseli; oklu liste öğeleri; grafik çizgisi turuncu.
+  - **11b:** antrenman, geçmiş (ay başlığı ve tarih rozeti), ilerleme, program ve ayarlar ekranlarının düzeni; silme ve sıfırlamanın ana eylemlerden ayrılması; Ayarlar simgeleri.
+- *Bitti sayılır:*
+  - Bütün birim ve uçtan uca testler geçiyor; kayıtlar, otomatik kaydetme ve çevrimdışı çalışma değişmiyor.
+  - Ana ve alt ekranlar 390 ve 320 px'te yatay taşmıyor; dokunma alanları en az 44 px (testte).
+  - Açık ekranın sekmesi işaretli; alt ekranlarda sekme yok, geri bağlantısı var.
 
 ## 9. İlk geliştirme görevi: Aşama 1
 Aşama 0 bittikten sonra başlar. Doğrulandıktan sonra durulur ve sonuç size bildirilir.

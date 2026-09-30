@@ -16,24 +16,22 @@ import {
   progressIndex,
 } from '../logic.js';
 import { loadProgram, loadSessions } from '../store.js';
-import { escapeHtml } from '../ui.js';
+import { appHeader, escapeHtml, linkItem } from '../ui.js';
 import { machineLabel, radioChip } from './exercise-card.js';
 
 export async function renderProgressList(container) {
   const [program, sessions] = await Promise.all([loadProgram(), loadSessions()]);
   const { days, other } = progressIndex(program, sessions);
   const groups = days.filter((day) => day.exercises.length);
-  const link = (record, prefix = '') => `
-    <li>
-      <a class="day" href="#/ilerleme/${escapeHtml(record.dayId)}/${escapeHtml(record.exerciseId)}">
-        <span class="day-name">${escapeHtml(record.name)}</span>
-        <span class="muted">${prefix}${record.count} antrenman · son: ${formatDate(record.lastDate)}</span>
-      </a>
-    </li>`;
+  const link = (record, prefix = '') => linkItem(
+    `#/ilerleme/${escapeHtml(record.dayId)}/${escapeHtml(record.exerciseId)}`,
+    escapeHtml(record.name),
+    `${prefix}${record.count} antrenman · son: ${formatDate(record.lastDate)}`,
+  );
 
   container.innerHTML = `
+    ${appHeader('#/ilerleme')}
     <header class="page-head">
-      <a class="back" href="#/">← Günler</a>
       <h1>İlerleme</h1>
     </header>
     ${groups.length || other.length ? `

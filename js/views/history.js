@@ -9,25 +9,23 @@ import {
   sessionSummary,
 } from '../logic.js';
 import { deleteSession, loadSessions } from '../store.js';
-import { errorReason, escapeHtml } from '../ui.js';
+import { appHeader, errorReason, escapeHtml, linkItem } from '../ui.js';
 
 export async function renderHistory(container, { flash }) {
   const sessions = finishedSessions(await loadSessions());
   container.innerHTML = `
+    ${appHeader('#/gecmis')}
     <header class="page-head">
-      <a class="back" href="#/">← Günler</a>
       <h1>Geçmiş</h1>
     </header>
     ${flash ? `<p id="flash" class="flash" role="status">${escapeHtml(flash)}</p>` : ''}
     ${sessions.length ? `
       <ul class="days history">
-        ${sessions.map((session) => `
-          <li>
-            <a class="day" href="#/gecmis/${escapeHtml(session.id)}">
-              <span class="day-name">${escapeHtml(session.dayName)} · ${formatDay(session.startedAt)}</span>
-              <span class="muted">${sessionSummary(session)} · ${formatDuration(session.startedAt, session.finishedAt)}</span>
-            </a>
-          </li>`).join('')}
+        ${sessions.map((session) => linkItem(
+          `#/gecmis/${escapeHtml(session.id)}`,
+          `${escapeHtml(session.dayName)} · ${formatDay(session.startedAt)}`,
+          `${sessionSummary(session)} · ${formatDuration(session.startedAt, session.finishedAt)}`,
+        )).join('')}
       </ul>` : '<p class="muted empty-state">Henüz bitmiş antrenman yok.</p>'}`;
   return {};
 }

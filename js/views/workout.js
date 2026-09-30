@@ -217,7 +217,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
             ? `<a class="back" href="#/gecmis/${escapeHtml(editing.id)}">← Vazgeç</a>
                <h1>${escapeHtml(day.name)} · ${formatDay(editing.startedAt)}</h1>
                <button type="button" class="button primary" data-action="save-edit"${disabled}>Kaydet</button>`
-            : `<a class="back" href="#/">← Günler</a>
+            : `<a class="back" href="#/">← Ana Sayfa</a>
                <h1>${escapeHtml(day.name)}</h1>
                <button type="button" class="button primary" data-action="finish"${disabled}>Bitir</button>`}
         </div>
@@ -232,7 +232,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
         <p class="muted empty-state">Bu günde hareket yok. <a href="#/program/${escapeHtml(day.id)}">Satır ekleyin</a> ya da bu antrenmana hareket ekleyin.</p>`}
       ${state.extraForm ? extraFormHtml() : `
         <div class="add-exercise">
-          <button type="button" class="button secondary" data-action="open-extra"${disabled}>+ Hareket ekle</button>
+          <button type="button" class="button add" data-action="open-extra"${disabled}>+ Hareket ekle</button>
         </div>`}
       ${editing ? '' : `
         <div class="page-actions">
@@ -956,7 +956,7 @@ function renderConflict(container, { active, day, program, navigate }) {
   function render() {
     container.innerHTML = `
       <header class="page-head">
-        <a class="back" href="#/">← Günler</a>
+        <a class="back" href="#/">← Ana Sayfa</a>
       </header>
       <section class="card conflict" aria-labelledby="conflict-title">
         <p class="eyebrow">Devam eden antrenman var</p>

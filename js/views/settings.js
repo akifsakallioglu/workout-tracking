@@ -9,7 +9,7 @@ import {
   restoreBackup,
   saveSettings,
 } from '../store.js';
-import { errorReason, escapeHtml } from '../ui.js';
+import { appHeader, errorReason, escapeHtml } from '../ui.js';
 
 export async function renderSettings(container) {
   const state = {
@@ -29,8 +29,8 @@ export async function renderSettings(container) {
   function render() {
     const { lastBackupAt } = state.settings;
     container.innerHTML = `
+      ${appHeader('#/ayarlar')}
       <header class="page-head">
-        <a class="back" href="#/">← Günler</a>
         <h1>Ayarlar</h1>
       </header>
 
