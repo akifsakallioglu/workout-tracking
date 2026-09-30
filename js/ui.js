@@ -34,8 +34,13 @@ export function appHeader(current) {
 }
 
 // Satır içi SVG simgeler. Süstürler; adı yanlarındaki yazı verir. Renk yazıdan gelir (currentColor).
+// Yedek için bulut değil indirme simgesi: uygulamada eşitleme yok, yedek cihaza inen bir dosyadır.
 const ICONS = {
   'chevron-right': '<path d="M9 6l6 6-6 6"/>',
+  download: '<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>',
+  restore: '<path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><path d="M3 3v5h5"/>',
+  database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/>'
+    + '<path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/>',
 };
 
 export function icon(name) {
@@ -43,12 +48,14 @@ export function icon(name) {
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
 }
 
-// Başka ekrana götüren liste öğesi: başlık, altında bilgi, sağda ok. Adres, başlık ve bilgi HTML
-// olarak gelir; kullanıcının yazdığı metin çağıran yerde escapeHtml'den geçer.
-export function linkItem(href, titleHtml, metaHtml) {
+// Başka ekrana götüren liste öğesi: başlık, altında bilgi, sağda ok; leadHtml solda durur (Geçmiş'te
+// tarih rozeti). Adres, başlık ve bilgi HTML olarak gelir; kullanıcının yazdığı metin çağıran yerde
+// escapeHtml'den geçer.
+export function linkItem(href, titleHtml, metaHtml, leadHtml = '') {
   return `
     <li>
       <a class="day" href="${href}">
+        ${leadHtml}
         <span class="day-text">
           <span class="day-name">${titleHtml}</span>
           <span class="muted">${metaHtml}</span>

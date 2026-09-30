@@ -1,5 +1,6 @@
 // Geçmiş: bitmiş antrenmanların listesi ve ayrıntısı (düzenleme ve onaylı silme buradan).
 import {
+  dateBadge,
   finishedSessions,
   formatDay,
   formatDuration,
@@ -7,6 +8,7 @@ import {
   formatTarget,
   formatTime,
   sessionSummary,
+  sessionsByMonth,
 } from '../logic.js';
 import { deleteSession, loadSessions } from '../store.js';
 import { appHeader, errorReason, escapeHtml, linkItem } from '../ui.js';
@@ -19,15 +21,23 @@ export async function renderHistory(container, { flash }) {
       <h1>Geçmiş</h1>
     </header>
     ${flash ? `<p id="flash" class="flash" role="status">${escapeHtml(flash)}</p>` : ''}
-    ${sessions.length ? `
+    ${sessions.length ? sessionsByMonth(sessions).map(({ month, sessions: items }) => `
+      <h2 class="month-title">${month}</h2>
       <ul class="days history">
-        ${sessions.map((session) => linkItem(
+        ${items.map((session) => linkItem(
           `#/gecmis/${escapeHtml(session.id)}`,
-          `${escapeHtml(session.dayName)} · ${formatDay(session.startedAt)}`,
+          escapeHtml(session.dayName),
           `${sessionSummary(session)} · ${formatDuration(session.startedAt, session.finishedAt)}`,
+          badgeHtml(session.startedAt),
         )).join('')}
-      </ul>` : '<p class="muted empty-state">Henüz bitmiş antrenman yok.</p>'}`;
+      </ul>`).join('') : '<p class="muted empty-state">Henüz bitmiş antrenman yok.</p>'}`;
   return {};
+}
+
+// Tarih rozeti: gün sayısı ve kısa gün adı; ay ve yıl üstteki ay başlığındadır.
+function badgeHtml(iso) {
+  const { day, weekday } = dateBadge(iso);
+  return `<span class="date-badge"><span class="date-badge-day">${day}</span><span class="date-badge-weekday">${weekday}</span></span>`;
 }
 
 export async function renderSessionDetail(container, { sessionId, navigate, flash }) {
@@ -57,7 +67,9 @@ export async function renderSessionDetail(container, { sessionId, navigate, flas
       </ul>
       <div class="actions detail-actions">
         <a class="button primary" href="#/gecmis/${escapeHtml(session.id)}/duzenle">Düzenle</a>
-        <button type="button" class="button danger" data-action="delete"${busy ? ' disabled' : ''}>Sil</button>
+      </div>
+      <div class="page-actions">
+        <button type="button" class="button danger block" data-action="delete"${busy ? ' disabled' : ''}>Sil</button>
       </div>
       <p id="detail-message" class="message" role="alert">${escapeHtml(message)}</p>`;
   }

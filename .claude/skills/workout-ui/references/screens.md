@@ -34,8 +34,8 @@ Sınıflar ve kimlikler `tests/e2e.py`'de seçici olarak kullanılır. Birini de
 
 ## Geçmiş (`js/views/history.js`)
 - **Liste:** uygulama adı ve sekmeler → h1 "Geçmiş" → başarı bandı → ay grupları, en yeni üstte. Her grubun başında ay başlığı (h2, "Eylül 2026"; Türkçe ay adı ve yıl, `--font-size-md`, 500, `--muted`), altında o ayın antrenmanları. Öğe: solda tarih rozeti ([components.md → Liste öğeleri](components.md#liste-öğeleri)), ortada gün adı (`.day-name`, "Push") ve bilgi ("6 hareket · 18 set · 1 sa 6 dk"; `sessionSummary`, `formatDuration`), sağda ›. Ay ve gün, antrenmanın başladığı yerel tarihe göredir. Liste boşsa "Henüz bitmiş antrenman yok."
-- Bugün öğe başlığı "Push · 22 Eyl Sal"dır; tarih rozete ve ay başlığına taşınır. Bu metne bakan test seçicileri aynı adımda güncellenir. Veri değişmez; gruplar kayıtlardan hesaplanır.
-- **Ayrıntı:** "← Geçmiş" → h1 "Push · 29 Eyl Sal" → "Başlangıç 18:05 · 1 sa 6 dk · 6 hareket · 18 set" (`--muted`) → her hareket bir kart: h2 "Rope Pushdown · Kablo 2", setler (`--font-size-lg`, `tabular-nums`), "Hedef 3 × 12" (`--muted`) → "Düzenle" (ana) → sayfanın sonunda `--space-6` boşlukla "Sil" (tehlikeli, tam genişlik). Bugün "Sil", "Düzenle"nin yanındadır; silme kuralı gereği ayrılır.
+- Gruplar ve rozet kayıtlardan hesaplanır (`sessionsByMonth`, `dateBadge`); veri değişmez. Rozetin gün adı `.muted` sınıfı taşımaz, çünkü test öğenin bilgi satırını `.muted` ile okur.
+- **Ayrıntı:** "← Geçmiş" → h1 "Push · 29 Eyl Sal" → "Başlangıç 18:05 · 1 sa 6 dk · 6 hareket · 18 set" (`--muted`) → her hareket bir kart: h2 "Rope Pushdown · Kablo 2", setler (`--font-size-lg`, `tabular-nums`), "Hedef 3 × 12" (`--muted`) → "Düzenle" (ana, eylem satırını kaplar) → sayfanın sonunda `--space-6` boşlukla "Sil" (tehlikeli, tam genişlik).
 
 ## İlerleme (`js/views/progress.js`)
 - **Liste:** uygulama adı ve sekmeler → h1 "İlerleme" → gün grupları: bölüm başlığı (gün adı) ve öğeler ("Machine Chest Press", "9 antrenman · son: 29 Eyl", ›) → "Programda olmayan" grubu (bilgi satırı gün adıyla başlar). Boşsa bugünkü metin.

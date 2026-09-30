@@ -232,11 +232,11 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
         <p class="muted empty-state">Bu günde hareket yok. <a href="#/program/${escapeHtml(day.id)}">Satır ekleyin</a> ya da bu antrenmana hareket ekleyin.</p>`}
       ${state.extraForm ? extraFormHtml() : `
         <div class="add-exercise">
-          <button type="button" class="button add" data-action="open-extra"${disabled}>+ Hareket ekle</button>
+          <button type="button" class="button add block" data-action="open-extra"${disabled}>+ Hareket ekle</button>
         </div>`}
       ${editing ? '' : `
         <div class="page-actions">
-          <button type="button" class="button danger" data-action="cancel"${disabled}>Antrenmanı iptal et</button>
+          <button type="button" class="button danger block" data-action="cancel"${disabled}>Antrenmanı iptal et</button>
         </div>`}`;
     renderStatus();
   }

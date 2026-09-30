@@ -2340,6 +2340,9 @@ def design_steps(run):
             page.goto(f"{run.base_url}/#/gecmis/{session_id}/duzenle")
             expect(page.locator(".topbar h1")).to_contain_text("Push · ")
             check("geçmiş düzenleme")
+            page.goto(run.base_url + "/#/gecmis")
+            expect(page.locator(".history .day")).to_have_count(1)
+            check("geçmiş listesi")
             page.goto(run.base_url + "/#/ilerleme/push/rope-pushdown")
             expect(page.locator(".readout-value")).to_be_visible()
             check("ilerleme grafiği")
@@ -2357,7 +2360,50 @@ def design_steps(run):
             check("antrenman, dönüşümlü satır")
         page.set_viewport_size(PHONE)
         assert not problems, "\n".join(problems)
-        return "11 ekran durumu, 390 ve 320 px"
+        return "12 ekran durumu, 390 ve 320 px"
+
+    def layout_rules(page):
+        # Önceki adımda bugün bitirilen Push antrenmanı: ay başlığı ve tarih rozeti kayıttan gelir.
+        page.goto(run.base_url + "/#/gecmis")
+        month = page.evaluate("new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' }).format(new Date())")
+        expect(page.locator(".month-title")).to_have_text([month])
+        row = page.locator(".history .day")
+        expect(row.locator(".date-badge-day")).to_have_text(str(page.evaluate("new Date().getDate()")))
+        expect(row.locator(".day-name")).to_have_text("Push")
+        page.screenshot(path=str(ARTIFACTS / "asama11-gecmis.png"))
+
+        # Silme ve sıfırlama: ana eylemden en az 24 px aşağıda ve tam genişlikte; ekleme düğmeleri tam genişlikte.
+        content = page.locator("main").evaluate("(el) => el.clientWidth - 2 * parseFloat(getComputedStyle(el).paddingLeft)")
+
+        def full_width(locator):
+            width = locator.bounding_box()["width"]
+            assert abs(width - content) < 1, f"{width} ≠ {content}"
+
+        def below(upper, lower):
+            gap = lower.bounding_box()["y"] - (upper.bounding_box()["y"] + upper.bounding_box()["height"])
+            assert gap >= 24, f"aradaki boşluk {gap} px"
+            full_width(lower)
+
+        row.click()
+        below(page.get_by_role("link", name="Düzenle"), page.get_by_role("button", name="Sil"))
+        page.screenshot(path=str(ARTIFACTS / "asama11-gecmis-ayrinti.png"), full_page=True)
+        page.goto(run.base_url + "/#/antrenman/push")
+        full_width(page.get_by_role("button", name="+ Hareket ekle"))
+        below(page.get_by_role("button", name="+ Hareket ekle"), page.get_by_role("button", name="Antrenmanı iptal et"))
+        page.goto(run.base_url + "/#/program")
+        full_width(page.get_by_role("button", name="+ Gün ekle"))
+        page.goto(run.base_url + "/#/program/push")
+        full_width(page.get_by_role("link", name="+ Satır ekle"))
+        below(page.get_by_role("link", name="+ Satır ekle"), page.get_by_role("button", name="Günü sil"))
+        program_rows(page).first.click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Satırı düzenle")
+        below(page.locator("form[data-form='item']"), page.get_by_role("button", name="Satırı sil"))
+
+        # Ayarlar: kart başlıklarında simge (yedek için indirme; bulut yok), başlık adı yazıdan.
+        page.goto(run.base_url + "/#/ayarlar")
+        expect(page.locator(".card-title .icon")).to_have_count(3)
+        expect(page.get_by_role("heading", name="Yedek", exact=True)).to_be_visible()
+        page.screenshot(path=str(ARTIFACTS / "asama11-ayarlar.png"), full_page=True)
 
     return [
         ("Yalnızca koyu tema: telefon açık temadayken de zemin antrasit", dark_theme_only),
@@ -2367,6 +2413,7 @@ def design_steps(run):
         ("Klavyeyle ilk odak sekmede ve odak halkası görünüyor", keyboard_focus_visible),
         ("Ana ekranlar 390 ve 320 px'te taşmıyor; dokunma alanları en az 44 px", fits_phone_widths),
         ("Alt ekranlar ve formlar da 390 ve 320 px'te taşmıyor; dokunma alanları en az 44 px", sub_screens_fit_phone_widths),
+        ("Geçmiş ay başlığı ve tarih rozetiyle; silme düğmeleri ana eylemden ayrı ve tam genişlikte; Ayarlar simgeleri", layout_rules),
     ]
 
 

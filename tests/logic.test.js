@@ -11,6 +11,7 @@ import {
   changedEquipment,
   collectSets,
   counterText,
+  dateBadge,
   dayNameError,
   defaultEquipmentId,
   equipmentError,
@@ -51,6 +52,7 @@ import {
   restoreError,
   restoredEquipment,
   sessionSummary,
+  sessionsByMonth,
   suggestOption,
   suggestionText,
   upgradeProgram,
@@ -644,6 +646,20 @@ test('geçmiş: bitmiş antrenmanlar en yeniden eskiye; süre, gün ve özet bi�
   assertEqual(formatDuration('2026-09-29T15:00:00.000Z', '2026-09-29T17:00:00.000Z'), '2 sa');
   const day = formatDay('2026-09-29T12:00:00.000Z', new Date('2026-10-01T00:00:00.000Z'));
   assert(/^29 Eyl \S+$/.test(day), day);
+});
+
+test('geçmiş listesi aylara göre: en yeni ay üstte, sıra korunuyor, yıl ay başlığında; tarih rozeti', () => {
+  const sessions = finishedSessions([
+    session({ id: 'aralik', date: '2025-12-31T12:00:00.000Z' }),
+    session({ id: 'eylul-29', date: '2026-09-29T12:00:00.000Z' }),
+    session({ id: 'agustos', date: '2026-08-31T12:00:00.000Z' }),
+    session({ id: 'eylul-15', date: '2026-09-15T12:00:00.000Z' }),
+  ]);
+  const groups = sessionsByMonth(sessions);
+  assertEqual(groups.map((group) => group.month), ['Eylül 2026', 'Ağustos 2026', 'Aralık 2025']);
+  assertEqual(groups.map((group) => group.sessions.map((item) => item.id)), [['eylul-29', 'eylul-15'], ['agustos'], ['aralik']]);
+  assertEqual(sessionsByMonth([]), []);
+  assertEqual(dateBadge('2026-09-29T12:00:00.000Z'), { day: '29', weekday: 'Sal' });
 });
 
 test('geçmiş bir antrenman düzenlenirken sayaç o antrenmandan önceki kayıtlara göre', () => {

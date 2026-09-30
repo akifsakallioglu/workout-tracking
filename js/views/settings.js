@@ -9,7 +9,7 @@ import {
   restoreBackup,
   saveSettings,
 } from '../store.js';
-import { appHeader, errorReason, escapeHtml } from '../ui.js';
+import { appHeader, errorReason, escapeHtml, icon } from '../ui.js';
 
 export async function renderSettings(container) {
   const state = {
@@ -35,7 +35,7 @@ export async function renderSettings(container) {
       </header>
 
       <section class="card settings-section" aria-labelledby="backup-title">
-        <h2 id="backup-title">Yedek</h2>
+        <h2 id="backup-title" class="card-title">${icon('download')}Yedek</h2>
         <p id="last-backup">Son yedek: ${lastBackupAt ? formatDateTime(lastBackupAt) : 'henüz yedek alınmadı'}</p>
         <p class="muted">Verileriniz yalnızca bu cihazda duruyor. Yedek dosyasını telefonunuzda ya da Drive gibi başka bir yerde saklayın; telefon değişirse ya da tarayıcı verileri silinirse buradan geri yüklersiniz.</p>
         <div class="actions">
@@ -46,7 +46,7 @@ export async function renderSettings(container) {
       </section>
 
       <section class="card settings-section" aria-labelledby="restore-title">
-        <h2 id="restore-title">Yedeği geri yükle</h2>
+        <h2 id="restore-title" class="card-title">${icon('restore')}Yedeği geri yükle</h2>
         <p class="muted">Yedek dosyası seçin. Dosya önce denetlenir; onaylarsanız bu cihazdaki program ve antrenmanlar yedektekilerle değiştirilir.</p>
         <label class="file-field">
           <span>Yedek dosyası</span>
@@ -57,7 +57,7 @@ export async function renderSettings(container) {
       </section>
 
       <section class="card settings-section" aria-labelledby="storage-title">
-        <h2 id="storage-title">Kalıcı depolama</h2>
+        <h2 id="storage-title" class="card-title">${icon('database')}Kalıcı depolama</h2>
         <p id="storage-status">${storageText()}</p>
         ${state.persisted === false ? `<div class="actions"><button type="button" class="button secondary" data-action="persist">Kalıcı depolama iste</button></div>` : ''}
         <p id="storage-message" class="status-message" role="status">${escapeHtml(state.storageMessage)}</p>

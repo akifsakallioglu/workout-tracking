@@ -9,6 +9,8 @@ const dayMonth = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'shor
 const dayMonthYear = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
 const timeFormat = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
 const weekdayFormat = new Intl.DateTimeFormat('tr-TR', { weekday: 'short' });
+const monthYearFormat = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' });
+const dayNumberFormat = new Intl.DateTimeFormat('tr-TR', { day: 'numeric' });
 
 // Boş kutu → null, geçerli değer → sayı, geçersiz değer → NaN. "22,5" ve "22.5" ikisi de 22.5 olur.
 export function parseWeight(text) {
@@ -434,6 +436,25 @@ export function sessionSummary(session) {
 // Bitmiş antrenmanlar, en yeniden eskiye.
 export function finishedSessions(sessions) {
   return sessions.filter((session) => session.finishedAt).sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
+}
+
+// Geçmiş listesi için aylara göre gruplar: [{ month: "Eylül 2026", sessions }]. Antrenmanlar en
+// yeniden eskiye sıralı gelir, sıra korunur. Ay, antrenmanın başladığı yerel tarihe göredir.
+export function sessionsByMonth(sessions) {
+  const groups = [];
+  for (const session of sessions) {
+    const month = monthYearFormat.format(new Date(session.startedAt));
+    const last = groups[groups.length - 1];
+    if (last?.month === month) last.sessions.push(session);
+    else groups.push({ month, sessions: [session] });
+  }
+  return groups;
+}
+
+// Tarih rozeti: gün sayısı ve kısa gün adı ({ day: "29", weekday: "Sal" }); ay ve yıl ay başlığındadır.
+export function dateBadge(iso) {
+  const date = new Date(iso);
+  return { day: dayNumberFormat.format(date), weekday: weekdayFormat.format(date) };
 }
 
 // ---------------------------------------------------------------- Yedek

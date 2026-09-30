@@ -242,6 +242,19 @@ legend,
   margin-top: var(--space-4);
 }
 
+/* Eylem satırındaki düğmeler satırı paylaşır ("Kaydet / Vazgeç" yan yana, ana eylem solda); tek düğme
+   satırı kaplar, sığmayan alt satıra geçer. */
+.actions > .button {
+  flex: 1 1 auto;
+}
+
+/* Silme ve sıfırlama: sayfanın sonunda, ana eylemlerden ayrı ve tam genişlikte. */
+.page-actions {
+  display: flex;
+  flex-direction: column;
+  margin: var(--space-6) 0 var(--space-2);
+}
+
 /* Form alanları */
 .field {
   display: flex;
@@ -601,7 +614,47 @@ select[aria-invalid="true"] {
   margin-top: var(--space-2);
 }
 
-/* Geçmiş */
+/* Geçmiş: aylara göre gruplar, solda tarih rozeti (gün sayısı ve kısa gün adı). */
+.month-title {
+  margin: var(--space-5) 0 var(--space-2);
+  color: var(--muted);
+  font-size: var(--font-size-md);
+  font-weight: 500;
+}
+
+.page-head + .month-title,
+.flash + .month-title {
+  margin-top: 0;
+}
+
+.history .day {
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
+}
+
+.date-badge {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  background: var(--subtle);
+  line-height: 1.15;
+}
+
+.date-badge-day {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-badge-weekday {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+}
+
 .entries {
   display: flex;
   flex-direction: column;
@@ -628,6 +681,19 @@ select[aria-invalid="true"] {
 /* Ayarlar */
 .settings-section + .settings-section {
   margin-top: var(--space-3);
+}
+
+/* Kart başlığındaki simge süstür (turuncu, sınırlı vurgu); adı başlık yazısı verir. */
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.card-title .icon {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  color: var(--accent);
 }
 
 .settings-section h2 + p {
@@ -675,6 +741,12 @@ select[aria-invalid="true"] {
 
 .restore-summary p:first-child {
   margin-top: 0;
+}
+
+/* Uyarı zemininde kırmızı yazı (4,46:1) ve gri kenar (2,76:1) sınırın altında kalır; düğmeler kart
+   zemininde durur (5,79:1 ve 3,59:1). */
+.restore-summary .button {
+  background: var(--surface);
 }
 
 /* Antrenman ekranı */
@@ -878,8 +950,6 @@ select[aria-invalid="true"] {
 }
 
 .add-exercise {
-  display: flex;
-  justify-content: center;
   margin-top: var(--space-4);
 }
 
@@ -889,12 +959,6 @@ select[aria-invalid="true"] {
 
 .extra-form .field + .field {
   margin-top: var(--space-3);
-}
-
-.page-actions {
-  display: flex;
-  justify-content: center;
-  margin: var(--space-5) 0 var(--space-2);
 }
 
 /* Başka bir gün devam ederken */
@@ -907,6 +971,11 @@ select[aria-invalid="true"] {
   flex-direction: column;
   gap: var(--space-2);
   margin-top: var(--space-4);
+}
+
+/* "Sil ve … başla" diğer seçeneklerden ayrı (aradaki boşlukla birlikte --space-6). */
+.conflict-actions .button.danger {
+  margin-top: var(--space-5);
 }
 
 /* İlerleme */

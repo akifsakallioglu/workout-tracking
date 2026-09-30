@@ -65,14 +65,14 @@ export async function renderProgram(container, { navigate, flash }) {
           </div>
         </form>` : `
         <div class="actions">
-          <button type="button" class="button add" data-action="open-day-form">+ Gün ekle</button>
+          <button type="button" class="button add block" data-action="open-day-form">+ Gün ekle</button>
         </div>`}
       <p id="program-message" class="message" role="alert">${escapeHtml(state.message)}</p>
       <section class="card reset-section" aria-labelledby="reset-title">
         <h2 id="reset-title">Programı sıfırla</h2>
         <p class="muted">Günler, satırlar, hedefler ve hareket adları başlangıç programına döner. Makineler ve geçmiş kayıtlar korunur.</p>
         <div class="actions">
-          <button type="button" class="button danger" data-action="reset"${busy ? ' disabled' : ''}>Programı sıfırla</button>
+          <button type="button" class="button danger block" data-action="reset"${busy ? ' disabled' : ''}>Programı sıfırla</button>
         </div>
       </section>`;
     if (focus) container.querySelector(focus)?.focus();
@@ -183,11 +183,11 @@ export async function renderDayEditor(container, { dayId, navigate, flash }) {
             </li>`).join('')}
         </ol>` : '<p class="muted empty-state">Bu günde henüz satır yok.</p>'}
       <div class="actions">
-        <a class="button add" href="#/program/${escapeHtml(dayId)}/yeni">+ Satır ekle</a>
+        <a class="button add block" href="#/program/${escapeHtml(dayId)}/yeni">+ Satır ekle</a>
       </div>
       <p id="day-message" class="message" role="alert">${escapeHtml(state.message)}</p>
       <div class="page-actions">
-        <button type="button" class="button danger" data-action="delete-day"${busy ? ' disabled' : ''}>Günü sil</button>
+        <button type="button" class="button danger block" data-action="delete-day"${busy ? ' disabled' : ''}>Günü sil</button>
       </div>`;
     if (focus) container.querySelector(focus)?.focus();
   }
@@ -301,7 +301,7 @@ export async function renderItemEditor(container, { dayId, itemId, navigate }) {
       </form>
       ${existing ? `
         <div class="page-actions">
-          <button type="button" class="button danger" data-action="delete-item"${busy ? ' disabled' : ''}>Satırı sil</button>
+          <button type="button" class="button danger block" data-action="delete-item"${busy ? ' disabled' : ''}>Satırı sil</button>
         </div>` : ''}`;
     if (focus) container.querySelector(focus)?.focus();
   }

@@ -48,6 +48,7 @@ Metin en az 4,5:1 (CLAUDE.md kuralı). Bir denetimi tanıtan kenar, odak halkas�
 | accent / bg · surface | 5,74 · 5,08 | |
 | accent / subtle | 4,45 | **Yazı için geçmez**; kenar ve odak için yeter (≥ 3) |
 | accent / warn-bg | 4,51 | Sınırda |
+| danger · border-strong / warn-bg (kart içinde) | 4,46 · 2,76 | **Geçmez**; uyarı kutusundaki düğmeler `--surface` zeminli (5,79 · 3,59) |
 | accent-text / accent | 5,74 | Beyaz yazı turuncuda 3,07: geçmez |
 | ok / bg · surface · ok-soft | 9,07 · 8,02 · 6,94 | |
 | danger / bg · surface · subtle | 6,55 · 5,79 · 5,08 | |

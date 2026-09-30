@@ -23,7 +23,7 @@ Turuncu az olduğu için anlam taşır. Bir ekranda aynı anda en fazla bir turu
 
 - `.secondary` nötrdür; turuncu çerçeve yalnızca ekleme düğmelerindedir (`.add`).
 - Hepsi en az `--tap` (44 px) yüksek; köşe `--radius-md`; yazı `--font-size-md`. Küçük düğme de en az 44 × 44 px'tir; "Sil" gibi kısa yazıda genişlik düşmesin diye `min-width` da vardır. Kompaktlık yüksekliği azaltarak değil, yatay boşluğu daraltarak sağlanır.
-- **Genişlik:** sayfanın sonunda tek başına duran ekleme ve silme düğmeleri tam genişliktir (`.button.block`). Formun sonundaki "Kaydet / Vazgeç" gibi çiftler yan yana ve eşit genişliktedir, ana eylem solda. Kart içindeki diğer düğmeler içerik genişliğindedir.
+- **Genişlik:** sayfanın sonunda tek başına duran ekleme ve silme düğmeleri tam genişliktir (`.button.block`). Eylem satırındaki (`.actions`) düğmeler satırı paylaşır: "Kaydet / Vazgeç" gibi çiftler yan yana ve yaklaşık eşit genişlikte durur, ana eylem solda; tek düğme satırı kaplar; sığmayan alt satıra geçer. Eylem satırı dışındaki düğmeler ("Başla", "+ Set", "Kaldır") içerik genişliğindedir.
 - **Silme ve sıfırlama ana eylemin yanında durmaz:** sayfanın sonunda, üstünde `--space-6` boşlukla ya da kendi kartındadır. İki istisna var: makine listesindeki küçük "Sil" öğenin en sağında durur; geri yükleme özetindeki "Geri yükle" zaten ayrı bir onay kutusunda olduğundan "Vazgeç" ile yan yana durabilir.
 - **Kapalı düğme** (`disabled`): `opacity: 0.45`, imleç normal. Yazma sürerken (`busy`) kapanan düğmelerin mantığı JS'tedir; CSS yalnızca görünüşü verir.
 - **Basılı durum:** `:active` hafif koyulaşma. Üzerine gelme (hover) biçimi yalnızca `@media (hover: hover)` içinde.
@@ -35,7 +35,7 @@ Turuncu az olduğu için anlam taşır. Bir ekranda aynı anda en fazla bir turu
 - **Kart başlığı:** solda başlık (h2, `--font-size-lg`, 600), sağda kısa bilgi ("Hedef 3 × 12", `--muted`, satır kırılmaz). Başlık uzunsa alt satıra geçer (`min-width: 0; overflow-wrap: anywhere`); sağdaki bilgi ilk satırla hizalı kalır ve küçülmez.
 - **Kart içi kutu** ("Geçen sefer", makine formu, ad düzeltme): `--subtle` zemin, `--radius-sm`, iç boşluk `--space-3`. İçinde turuncu yazı yok.
 - **Vurgulu kart** (devam eden antrenman): kenar `--highlight`.
-- **Ayarlar kartı:** başlık satırında solda simge (`--icon-lg`, `--accent`, süs), yanında h2.
+- **Ayarlar kartı:** başlık `h2.card-title`; içinde solda simge (`--icon-lg`, `--accent`, süs: `download`, `restore`, `database`), sonra başlık yazısı.
 
 ## Liste öğeleri
 Başka ekrana götüren öğeler: ana sayfadaki günler, geçmiş, ilerleme listesi, program günleri ve satırları.
@@ -43,7 +43,8 @@ Başka ekrana götüren öğeler: ana sayfadaki günler, geçmiş, ilerleme list
 - Görünüş: `--surface` zemin, 1 px `--border`, `--radius-md`, en az 56 px yükseklik, iç boşluk dikeyde `--space-3` yatayda `--space-4`; öğeler arası `--space-2`.
 - İçerik: başlık (`.day-name`, 600, `--text`) ve altında bilgi (`.muted`). Metin sütunu `flex: 1; min-width: 0`; uzun ad alt satıra geçer.
 - Sağda liste oku (›): SVG, `--icon-md`, `--muted`, `aria-hidden="true"`, küçülmez (`flex: none`). Program listelerinde ok yok; sağda ↑ ↓ var.
-- Tarih rozeti (Geçmiş listesi): solda 48 × 48 `--subtle` kutu, `--radius-sm`; üstte gün sayısı (`--font-size-lg`, 600, `tabular-nums`), altta kısa gün adı (`--font-size-xs`, `--muted`). Rozet gerçek metindir, gizlenmez; ekran okuyucu "29 Sal Push …" diye okur, ay ve yıl üstteki ay başlığındadır.
+- Tarih rozeti (Geçmiş listesi): solda 48 × 48 `--subtle` kutu, `--radius-sm`; üstte gün sayısı (`--font-size-lg`, 600, `tabular-nums`), altta kısa gün adı (`--font-size-xs`, `--muted`). Rozet gerçek metindir, gizlenmez; ekran okuyucu "29 Sal Push …" diye okur, ay ve yıl üstteki ay başlığındadır. Rozet `linkItem`'in dördüncü değişkeniyle (`leadHtml`) verilir, değerleri `dateBadge()`'den (`js/logic.js`) gelir.
+- Ay başlığı (Geçmiş listesi, `h2.month-title`): `sessionsByMonth()` gruplarından; `--font-size-md`, 500, `--muted`.
 
 ## Form alanları
 - **Etiket** kutunun üstündedir: `--font-size-sm`, `--muted`; `label for` ile `id` bağlı. Radyo grupları `fieldset` ve `legend` ile (bugünkü yapı).
@@ -76,7 +77,7 @@ Radyo seçimleri: makine, dönüşümlü satırda "Bugün" hareketi, birim, graf
 | Öğe | Görünüş |
 |---|---|
 | Başarı bandı (`.flash`, `role="status"`) | `--ok-soft` zemin, `--ok` yazı, `--radius-sm` |
-| Uyarı kutusu (`.reminder`, `.restore-summary`) | `--warn-bg` zemin, 1 px `--warn-border`, `--text` yazı; içindeki bağlantı `--text` ve alt çizgili |
+| Uyarı kutusu (`.reminder`, `.restore-summary`) | `--warn-bg` zemin, 1 px `--warn-border`, `--text` yazı; içindeki bağlantı `--text` ve alt çizgili; içindeki düğmeler `--surface` zeminli (uyarı zemininde kırmızı yazı ve gri kenar sınırın altında kalır) |
 | Hata metni (`.message`, `role="alert"`) | `--danger` yazı; boşken gizli |
 | Durum metni (`.status-message`) | `--ok` yazı |
 | Kayıt durumu (`#save-status`) | Kaydediliyor… `--muted`; Kaydedildi ✓ `--ok`; Kaydedilemedi `--danger` ve ikincil "Tekrar dene" |
