@@ -18,7 +18,7 @@ Uygulama ilk açılışta dosyalarını telefona kaydeder; sonraki açılışlar
 
 ## Gezinme
 
-- Ana Sayfa, Geçmiş, İlerleme ve Ayarlar arasında üstteki sekmelerle ya da bu dört ekranda parmağı sağa sola kaydırarak geçersiniz.
+- Ana Sayfa, Geçmiş, İlerleme ve Ayarlar arasında üstteki sekmelerle ya da bu dört ekranda parmağı sağa sola kaydırarak geçersiniz. Sürüklerken sayfa ve sekme çizgisi parmağı izler; az sürükleyip bırakırsanız sayfa yerine döner. Yana kaydırırken sayfa aşağı yukarı kaymaz.
 - Telefonun geri hareketi uygulamadaki "←" ile aynı yere gider. Sekmeler arasında gidip gelmek geçmişte kayıt biriktirmez; bir sekmedeyken geri hareketi Ana Sayfa'ya döner.
 - Ekranın en kenarından başlayan kaydırma telefonun kendi hareketidir (iPhone'da geri ya da ileri, Android'de geri).
 

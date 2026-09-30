@@ -1,6 +1,6 @@
 import { assert, assertEqual, test } from './harness.js';
 import { lineChart, niceTicks } from '../js/chart.js';
-import { SWIPE_EDGE, SWIPE_MIN, SWIPE_TIME, swipeDirection } from '../js/swipe.js';
+import { AXIS_LOCK, FLICK_MIN, FLICK_SPEED, STRETCH_MAX, SWIPE_RATIO, gestureAxis, stretch, swipeResult } from '../js/swipe.js';
 import {
   activeSession,
   backupFileName,
@@ -1098,14 +1098,17 @@ test('"+ Hareket ekle": hedef hareketin programdaki ilk satırından; katalog de
 
 // ---------------------------------------------------------------- Sekmeler arasında kaydırma
 
-test('kaydırma: belirgin yatay hareket sekme değiştirir; kenardan, kısa, dikey ve yavaş hareket değiştirmez', () => {
-  const at = (x, y, time = 0) => ({ x, y, time });
-  const width = 390;
-  assertEqual(swipeDirection(at(300, 400), at(200, 410, 200), width), 'left', 'parmak sola: sıradaki sekme');
-  assertEqual(swipeDirection(at(100, 400), at(250, 380, 200), width), 'right', 'parmak sağa: önceki sekme');
-  assertEqual(swipeDirection(at(SWIPE_EDGE - 1, 400), at(250, 400, 200), width), null, 'soldaki kenar telefonun');
-  assertEqual(swipeDirection(at(width - SWIPE_EDGE + 1, 400), at(100, 400, 200), width), null, 'sağdaki kenar telefonun');
-  assertEqual(swipeDirection(at(300, 400), at(300 - SWIPE_MIN + 1, 400, 200), width), null, 'kısa hareket');
-  assertEqual(swipeDirection(at(300, 400), at(200, 480, 200), width), null, 'çoğunlukla dikey: liste kaydırılıyor');
-  assertEqual(swipeDirection(at(300, 400), at(200, 400, SWIPE_TIME + 1), width), null, 'yavaş hareket');
+test('kaydırma: yön ilk birkaç pikselde belirlenir; bırakınca dörtte bir yol ya da hızlı fırlatma geçer; uçta esneme', () => {
+  assertEqual(gestureAxis(AXIS_LOCK - 2, 1), null, 'yön henüz belli değil');
+  assertEqual(gestureAxis(-8, 3), 'x', 'yatay: sayfa dikey kaymaz');
+  assertEqual(gestureAxis(3, 8), 'y', 'dikey: sayfa olağan kayar, sekme değişmez');
+  const width = 400;
+  assertEqual(swipeResult(-width * SWIPE_RATIO, 0, width), 'left', 'dörtte bir sola: sıradaki sekme');
+  assertEqual(swipeResult(width * SWIPE_RATIO, 0, width), 'right', 'dörtte bir sağa: önceki sekme');
+  assertEqual(swipeResult(-60, 0, width), null, 'az sürükleyip bırakınca yerine döner');
+  assertEqual(swipeResult(-FLICK_MIN, -FLICK_SPEED, width), 'left', 'kısa ama hızlı fırlatma geçer');
+  assertEqual(swipeResult(-FLICK_MIN + 1, -2, width), null, 'çok kısa fırlatma geçmez');
+  assertEqual(swipeResult(-60, 0.8, width), null, 'sola sürükleyip sağa fırlatınca yerine döner');
+  assertEqual(stretch(-30), -9, 'sekme olmayan yönde içerik parmağın gerisinde kalır');
+  assertEqual(stretch(500), STRETCH_MAX, 'esneme sınırlı');
 });

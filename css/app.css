@@ -45,7 +45,7 @@
   --icon-md: 20px;
   --icon-lg: 24px;
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --duration-slide: 200ms; /* kaydırmayla açılan ekranın kayması */
+  --duration-slide: 200ms; /* sekme geçişinde içeriğin ve sekme çizgisinin kayması */
 }
 
 * {
@@ -437,6 +437,7 @@ select[aria-invalid="true"] {
 /* Sekmeler satırı kaplar (görseldeki gibi). Yazı büyütülüp sığmazsa sayfa değil çubuk kayar;
    iç boşluk odak halkası kırpılmasın diye. */
 .tabs {
+  position: relative;
   display: flex;
   justify-content: space-between;
   gap: var(--space-3);
@@ -460,44 +461,76 @@ select[aria-invalid="true"] {
   color: var(--accent);
 }
 
-.tab[aria-current="page"]::after {
+/* Durağan çizgi açık sekmenin altındadır. Sekme değişirken ve parmakla sürüklerken onun yerine kayan
+   çizgi (.tab-indicator, yeri ve genişliği main.js'ten) görünür. */
+.tab[aria-current="page"]::after,
+.tab-indicator {
   content: "";
   position: absolute;
-  right: 0;
   bottom: 0;
-  left: 0;
   height: 3px;
   border-radius: 3px;
   background: var(--accent);
 }
 
-/* Kaydırmayla açılan ana ekran, kaydırma yönünde kısa bir kaymayla gelir; "hareketi azalt" açıksa
-   gelmez. Kayarken sayfada yatay kaydırma çubuğu çıkmasın diye main o sırada yatayda kırpılır. */
+.tab[aria-current="page"]::after {
+  right: 0;
+  left: 0;
+}
+
+.tab-indicator {
+  bottom: var(--space-1); /* .tabs iç boşluğu: sekmenin alt kenarı */
+  left: 0;
+  display: none;
+  pointer-events: none;
+}
+
+.tabs.moving .tab-indicator {
+  display: block;
+}
+
+.tabs.moving .tab[aria-current="page"]::after {
+  display: none;
+}
+
+/* Parmakla sürüklerken içerik (başlık ve sekmeler hariç) parmağı izler (--drag-x, main.js); bırakınca
+   yerine döner ya da kayıp çıkar. Kaydırmayla açılan ekranın içeriği karşı kenardan kayarak gelir.
+   Hepsi "hareketi azalt" açıksa kapalıdır. Kayarken sayfada yatay kaydırma çubuğu çıkmasın diye main
+   o sırada yatayda kırpılır. */
 @media (prefers-reduced-motion: no-preference) {
-  main:has(> .slide-left, > .slide-right) {
+  main:has(> .swipe-drag, > .swipe-settle, > .slide-left, > .slide-right) {
     overflow-x: clip;
   }
 
-  .slide-left {
-    animation: slide-left var(--duration-slide) ease-out;
+  .swipe-drag > :not(.app-head),
+  .swipe-settle > :not(.app-head) {
+    transform: translateX(var(--drag-x, 0));
   }
 
-  .slide-right {
-    animation: slide-right var(--duration-slide) ease-out;
+  .swipe-settle > :not(.app-head),
+  .tab-indicator.animate {
+    transition: transform var(--duration-slide) ease-out, width var(--duration-slide) ease-out;
+  }
+
+  .slide-left > :not(.app-head) {
+    animation: slide-in-left var(--duration-slide) ease-out;
+  }
+
+  .slide-right > :not(.app-head) {
+    animation: slide-in-right var(--duration-slide) ease-out;
   }
 }
 
-@keyframes slide-left {
+/* Parmak sola kaydıysa yeni içerik sağdan, sağa kaydıysa soldan gelir. */
+@keyframes slide-in-left {
   from {
-    opacity: 0;
-    transform: translateX(var(--space-6));
+    transform: translateX(100%);
   }
 }
 
-@keyframes slide-right {
+@keyframes slide-in-right {
   from {
-    opacity: 0;
-    transform: translateX(calc(-1 * var(--space-6)));
+    transform: translateX(-100%);
   }
 }
 

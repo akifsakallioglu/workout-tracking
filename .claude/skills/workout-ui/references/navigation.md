@@ -66,12 +66,19 @@ Tarayıcı geçmişi, telefona yüklenen bir uygulamadaki gibi tutulur (kullanı
 | Sekme (`tab`) | Sekmeler ve bir ana ekrana götüren bağlantı ("Yedek al"), `data-nav="tab"` | Ana Sayfa'dan başka sekmeye: kayıt ekler (Ana Sayfa altta kalır); sekmeler arası: yerine geçer; Ana Sayfa'ya: `up` |
 
 - Koddan ekran değiştirmek `navigate(adres, mesaj, tür)` ile olur (`main.js`, ekranlara parametre olarak gelir). Yeni bir bağlantı ya da çağrı eklerken türünü bu tablodan seç; yanlış tür geri hareketini bozar.
-- **Kaydırma:** yalnızca dört ana ekranda. Parmak sola kayarsa sıradaki sekme, sağa kayarsa önceki açılır; uçlarda bir şey olmaz. Sayılması için en az 70 px ve çoğunlukla yatay (yatay yol dikeyin en az 2 katı), 0,8 sn'den kısa hareket gerekir (`js/swipe.js`). Dikey kaydırmaya ve dokunuşlara karışmaz (dinleyiciler `passive`).
+- **Kaydırma:** yalnızca dört ana ekranda. Parmak sola kayarsa sıradaki sekme, sağa kayarsa önceki açılır. Karar kuralları `js/swipe.js`'te saf fonksiyonlardır (birim testi); görünüş `main.js`'tedir.
+  - **Yön kilidi:** yön ilk 6 px'te belirlenir (`gestureAxis`). Yatay başladıysa parmak kalkana kadar `touchmove` engellenir ve sayfa dikey kaymaz; dikey başladıysa sayfa olağan kayar, sürükleme olmaz. Engelleme için `touchmove` dinleyicisi `passive: false`'tur; yalnızca ana ekranda ve yatay hareket sırasında engeller.
+  - **Parmağı izleme:** içerik (başlık ve sekmeler hariç: `.swipe-drag > :not(.app-head)`, `--drag-x`) parmakla kayar. Başlık ve sekmeler yerinde kalır.
+  - **Bırakınca** (`swipeResult`): ekranın dörtte biri kadar sürüklendiyse ya da hızla fırlatıldıysa (en az 30 px, 0,5 px/ms) içerik o yöne kayıp çıkar ve yan sekme açılır; yeni içerik karşı kenardan gelir. Değilse yerine döner. Parmak durup öyle kalkarsa hız sıfırdır.
+  - **Uçlar:** sekmenin olmadığı yönde içerik parmağın gerisinde kalır ve esner (`stretch`), bırakınca döner.
+- **Sekme çizgisi:** durağan çizgi açık sekmenin altındadır (CSS `::after`). Hareket sırasında onun yerine kayan çizgi (`.tab-indicator`, `.tabs.moving`) görünür: sürüklerken yandaki sekmeye doğru yol alır (yer ve genişlik ara değerli), sekmeye dokununca ve geri hareketiyle ana ekranlar arasında geçerken eski yerinden kayar. Hareket bitince durağan çizgiye bırakılır; kendini yeniden çizen ekranda (Ayarlar) çizgi bu yüzden kaybolmaz.
 - **Kenarlar telefonundur:** ekranın 24 px kenarından başlayan kaydırma sayılmaz; iPhone'da geri/ileri, Android'de sistem geri hareketidir ve sayfa bunları kapatamaz. Chrome'un kendi yatay kaydırma gezinmesi `html { overscroll-behavior-x: none }` ile kapalıdır.
 - Dinleyici bütün sayfadadır (`document`): kısa bir ekranın boş alt kısmı `main`'in dışında kalır.
 - Ana ekrana yatay sürüklenen bir öğe (kaydırılan şerit, kaydırıcı) eklenirse kaydırmayla çakışır: ya eklenmez ya da taşan sekme çubuğu gibi dışarıda bırakılır (`main.js`).
-- Kaydırmayla açılan ekran `--duration-slide` sürede, `--space-6` kadar yandan kayarak gelir; "hareketi azalt" açıksa kayma olmaz.
-- Test: uçtan uca testteki "Uygulama gibi geçmiş ve kaydırma" akışı, Chrome'a gerçek dokunma hareketi göndererek denetler.
+- Kaymalar `--duration-slide` sürer. "Hareketi azalt" açıksa içerik ve çizgi kaymaz, bırakınca doğrudan geçer; yön kilidi yine çalışır.
+- Kayarken `main` yatayda kırpılır (`overflow-x: clip`), sayfada yatay kaydırma çubuğu çıkmaz; kayma bitince sınıflar kalkar.
+- Yan sekme sürüklerken görünmez (iki ekranı aynı anda hazır tutmak büyük bir yapı değişikliği olurdu).
+- Test: uçtan uca testteki "Uygulama gibi geçmiş ve kaydırma" akışı, Chrome'a gerçek dokunma hareketi göndererek denetler: izleme, geri dönme, esneme, dikey kilit, dokununca çizgi, "hareketi azalt".
 
 ## Yeni ekran eklerken
 - Önce ana ekran mı alt ekran mı olduğuna karar ver. Dört sekme sabittir; kullanıcı kararı olmadan yeni sekme eklenmez.

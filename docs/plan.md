@@ -343,6 +343,14 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - Tarayıcı geçmişi hız sorunu yaratmaz (yalnızca kısa adresler tutulur, tarayıcı listeyi sınırlar); amaç, geri hareketinin anlaşılır olması.
 - *Bitti sayılır:* sekmeler arasında gidip gelmek geçmişi büyütmüyor; "←" ve "Bitir" geri gidiyor; kaydırma sekme değiştiriyor, kenardan ve dikey kaydırma değiştirmiyor, alt ekranlarda kaydırma yok (uçtan uca testte gerçek dokunma hareketiyle).
 
+**Aşama 13: Parmağı izleyen kaydırma, dikey kilit ve kayan sekme çizgisi** (kullanıcının isteği)
+- Sürüklerken içerik (başlık ve sekmeler hariç) parmağı izler; bırakınca ekranın dörtte biri kadar sürüklendiyse ya da hızla fırlatıldıysa eski içerik o yöne kayıp çıkar, yenisi karşı kenardan gelir; az sürüklendiyse yerine döner. Uçlarda (Ana Sayfa'da sağa, Ayarlar'da sola) içerik esner.
+- Hareketin yönü ilk birkaç pikselde belirlenir: yatay başladıysa parmak kalkana kadar sayfa dikey kaymaz; dikey başladıysa sayfa olağan kayar ve sekme değişmez.
+- Sekmenin altındaki turuncu çizgi sürüklerken yandaki sekmeye doğru yol alır; sekmeye dokununca da eski sekmeden yenisine kayar.
+- "Hareketi azalt" açıksa içerik ve çizgi kaymaz, geçiş doğrudan olur; dikey kilit yine çalışır.
+- Yan sekme sürüklerken görünmez: her ekran açılınca verisini okuyup çizildiğinden iki ekranı aynı anda hazır tutmak büyük bir yapı değişikliği olurdu.
+- *Bitti sayılır:* uçtan uca testte gerçek dokunma hareketiyle içerik ve çizgi parmağı izliyor, az sürükleyince yerine dönüyor, uçta esniyor; yatay harekette sayfa dikey kaymıyor, dikey harekette kayıyor; dokununca çizgi kayıyor; "hareketi azalt"ta içerik sürüklenmiyor.
+
 ## 9. İlk geliştirme görevi: Aşama 1
 Aşama 0 bittikten sonra başlar. Doğrulandıktan sonra durulur ve sonuç size bildirilir.
 

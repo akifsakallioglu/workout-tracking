@@ -3103,19 +3103,84 @@ def history_and_swipe_steps(run):
     def swipe_switches_tabs(page):
         cdp = page.context.new_cdp_session(page)
 
-        def swipe(x0, x1, y0=420, y1=None):  # Chrome'a gerçek parmak hareketi gönderilir
+        def drag(x0, x1, y0=420, y1=None):  # Chrome'a gerçek parmak hareketi gönderilir; parmak ekranda kalır
             y1 = y0 if y1 is None else y1
             points = [{"x": x0 + (x1 - x0) * step / 6, "y": y0 + (y1 - y0) * step / 6} for step in range(7)]
             cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [points[0]]})
             for point in points[1:]:
                 cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [point]})
+
+        def lift(pause=0):  # parmak kalkar; pause: önce parmak bir süre durur (fırlatma sayılmaz)
+            page.wait_for_timeout(pause)
             cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
 
+        def swipe(x0, x1, y0=420, y1=None):
+            drag(x0, x1, y0, y1)
+            lift()
+
         def stays(tab):
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(400)
             expect(current_tab(page)).to_have_text(tab)
 
+        def content_x():  # içeriğin (başlık ve sekmeler hariç) yatay kayması
+            return page.evaluate(
+                "new DOMMatrix(getComputedStyle(document.querySelector('#app > div > :not(.app-head)')).transform).m41"
+            )
+
+        def indicator_x():
+            return page.evaluate("new DOMMatrix(document.querySelector('.tab-indicator').style.transform).m41")
+
         start = history_length(page)
+
+        # Sürüklerken içerik ve sekme çizgisi parmağı izler; başlık yerinde kalır; az sürükleyince yerine döner.
+        home_x = page.evaluate("document.querySelector('.tabs [aria-current]').offsetLeft")
+        drag(300, 240)
+        assert -61 < content_x() < -59, content_x()
+        expect(page.locator(".tabs.moving .tab-indicator")).to_be_visible()
+        assert indicator_x() > home_x, (indicator_x(), home_x)  # Geçmiş'e doğru yol aldı
+        assert page.evaluate("getComputedStyle(document.querySelector('.app-head')).transform") == "none"
+        lift(pause=200)
+        stays("Ana Sayfa")
+        assert content_x() == 0, content_x()
+        expect(page.locator(".tabs.moving")).to_have_count(0)
+
+        # Yatay harekette sayfa dikey kaymaz; dikey harekette olağan kayar ve sekme değişmez.
+        page.set_viewport_size({"width": 390, "height": 560})
+        drag(300, 230, 420, 370)
+        assert page.evaluate("scrollY") == 0, page.evaluate("scrollY")
+        lift(pause=200)
+        stays("Ana Sayfa")
+        drag(200, 205, 450, 250)
+        lift()
+        stays("Ana Sayfa")
+        assert page.evaluate("scrollY") > 0, "dikey hareket sayfayı kaydırmalı"
+        page.evaluate("scrollTo(0, 0)")
+        page.set_viewport_size(PHONE)
+
+        # Uçta (Ana Sayfa'da sağa) içerik parmağın gerisinde kalır, bırakınca yerine döner.
+        drag(100, 220)
+        assert 30 < content_x() < 40, content_x()
+        lift()
+        stays("Ana Sayfa")
+        assert content_x() == 0, content_x()
+
+        # Sekmeye dokununca çizgi eski sekmeden yenisine kayar (kayma süresi test için uzatıldı).
+        slow = page.add_style_tag(content=":root { --duration-slide: 1500ms; }")
+        page.get_by_role("link", name="Geçmiş", exact=True).click()
+        expect(current_tab(page)).to_have_text("Geçmiş")
+        expect(page.locator(".tabs.moving .tab-indicator.animate")).to_be_visible()
+        slow.evaluate("(element) => element.remove()")
+        expect(page.locator(".tabs.moving")).to_have_count(0, timeout=3000)
+
+        # "Hareketi azalt" açıkken içerik sürüklenmez; bırakınca doğrudan geçer.
+        page.emulate_media(reduced_motion="reduce")
+        drag(300, 150)
+        assert content_x() == 0, content_x()
+        lift()
+        expect(current_tab(page)).to_have_text("İlerleme")
+        page.emulate_media(reduced_motion="no-preference")
+        page.get_by_role("link", name="Ana Sayfa", exact=True).click()
+        expect(current_tab(page)).to_have_text("Ana Sayfa")
         for tab in ["Geçmiş", "İlerleme", "Ayarlar"]:
             swipe(300, 100)  # parmak sola: sıradaki sekme
             expect(current_tab(page)).to_have_text(tab)
@@ -3143,7 +3208,8 @@ def history_and_swipe_steps(run):
         ("Sekmeler arasında gidip gelmek geçmişi büyütmüyor; sekmedeyken geri hareketi Ana Sayfa'ya dönüyor", tabs_keep_history_short),
         ("\"←\" bağlantıları gerçekten geri gidiyor; geçmiş büyümüyor", back_links_go_back),
         ("'Bitir' Ana Sayfa'ya geri dönüyor; geçmiş büyümüyor", finish_returns_back),
-        ("Parmakla kaydırma sekme değiştiriyor; kenardan, dikey ve alt ekranda değiştirmiyor", swipe_switches_tabs),
+        ("Parmakla kaydırma: içerik ve sekme çizgisi parmağı izliyor, az sürükleyince yerine dönüyor, uçta esniyor; "
+         "yatay harekette sayfa dikey kaymıyor; kenardan, dikey ve alt ekranda sekme değişmiyor; dokununca çizgi kayıyor", swipe_switches_tabs),
     ]
 
 

@@ -5,7 +5,7 @@
 // Tarayıcı geçmişi telefona yüklenen bir uygulamadaki gibi tutulur (navigate); dört ana ekranda
 // parmakla kaydırınca sekme değişir.
 import { initStore, screenChanged, stopWrites, waitForWrites } from './store.js';
-import { listenForSwipes } from './swipe.js';
+import { listenForSwipes, stretch } from './swipe.js';
 import { renderHistory, renderSessionDetail } from './views/history.js';
 import { renderHome } from './views/home.js';
 import { renderDayEditor, renderItemEditor, renderProgram } from './views/program.js';
@@ -24,6 +24,7 @@ let shownTab = null; // açık ana ekranın sekmesi; alt ekranlarda null
 let shownFrom = null; // açık ekrana hangi ekrandan gelindi (geçmiş kaydında da yazılı)
 let replacing = null; // yerine geçme sürüyor: yeni kayıt, eskisinin geldiği yeri devralır
 let slide = ''; // kaydırmayla açılan ekranın giriş yönü: 'left' ya da 'right'
+let settling = false; // parmak kalktı, içerik kayıyor: yeni sürükleme başlamaz
 let flash = '';
 let showCount = 0;
 
@@ -65,11 +66,14 @@ async function show() {
   shownHash = location.hash;
   const message = flash;
   flash = '';
+  // Sekmeye dokunarak (ya da geri hareketiyle) başka ana ekrana geçerken sekme çizgisi eski yerinden
+  // kayar. Kaydırmayla geçişte çizgi zaten yeni sekmeye varmıştır.
+  const indicatorFrom = slide || !motionAllowed() ? null : activeTabBox(app);
   // Her ekran yeni bir kaba çizilir; eski ekranın olay dinleyicileri onunla birlikte gider.
   const container = document.createElement('div');
-  // Kaydırmayla açılan ekran kısa bir kaymayla gelir ("hareketi azalt" açıksa gelmez); kayma bitince
-  // sınıf kalkar.
-  if (slide && matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+  // Kaydırmayla açılan ekranın içeriği kaydırma yönünden kayarak gelir ("hareketi azalt" açıksa
+  // gelmez); kayma bitince sınıf kalkar.
+  if (slide && motionAllowed()) {
     container.className = `slide-${slide}`;
     container.addEventListener('animationend', () => container.removeAttribute('class'), { once: true });
   }
@@ -96,8 +100,10 @@ async function show() {
   else if (hash === '#/ayarlar') shown = await renderSettings(container);
   else shown = await renderHome(container, { flash: message });
   // Bu ekran yüklenirken adres yeniden değiştiyse geç kalan ekran yenisinin yerine geçmesin.
-  if (token === showCount) view = shown;
-  else shown?.destroy?.();
+  if (token === showCount) {
+    view = shown;
+    if (indicatorFrom) slideIndicator(container.querySelector('.tabs'), indicatorFrom);
+  } else shown?.destroy?.();
 }
 
 // Ekran değişmeden önce açık ekran bekleyen değişikliğini yazar; gerekirse kullanıcıya sorar. Yazma
@@ -135,16 +141,105 @@ document.addEventListener('click', (event) => {
   navigate(link.getAttribute('href'), '', link.dataset.nav);
 });
 
-// Ana ekranlarda kaydırma: sağdan sola sıradaki sekme, soldan sağa önceki; uçlarda bir şey olmaz.
-// Sayfanın tamamı dinlenir: kısa bir ekranın boş alt kısmı main'in dışında kalır.
-listenForSwipes(document, (direction, target) => {
-  if (!shownTab) return;
-  const tabs = target.closest?.('.tabs');
-  if (tabs && tabs.scrollWidth > tabs.clientWidth) return; // taşan sekme çubuğu kendi içinde kayar
-  const next = TABS[TABS.indexOf(shownTab) + (direction === 'left' ? 1 : -1)];
-  if (!next) return;
-  slide = direction;
-  navigate(next, '', 'tab');
+// ---------------------------------------------------------------- Sekmeler arasında geçişin görünüşü
+
+const motionAllowed = () => matchMedia('(prefers-reduced-motion: no-preference)').matches;
+const slideTime = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-slide')) || 200;
+let indicatorTimer = null;
+
+function tabBox(tab) {
+  return { left: tab.offsetLeft, width: tab.offsetWidth };
+}
+
+function activeTabBox(root) {
+  const tab = root.querySelector('.tabs [aria-current="page"]');
+  return tab ? tabBox(tab) : null;
+}
+
+// Durağan çizgi açık sekmenin altındadır (CSS). Hareket sırasında onun yerine kayan çizgi görünür
+// (.tabs.moving); hareket bitince durağan çizgiye bırakılır. Böylece kendini yeniden çizen ekranda da
+// (ör. Ayarlar) çizgi kaybolmaz.
+function moveIndicator(nav, box, animate) {
+  clearTimeout(indicatorTimer);
+  const line = nav.querySelector('.tab-indicator');
+  line.classList.toggle('animate', animate);
+  line.style.transform = `translateX(${box.left}px)`;
+  line.style.width = `${box.width}px`;
+  nav.classList.add('moving');
+}
+
+function releaseIndicator(nav, after) {
+  indicatorTimer = setTimeout(() => nav.classList.remove('moving'), after);
+}
+
+// Yeni ana ekranda çizgi, önceki ekrandaki yerinden açık sekmeye kayar.
+function slideIndicator(nav, from) {
+  const to = nav && activeTabBox(nav);
+  if (!to || (to.left === from.left && to.width === from.width)) return;
+  moveIndicator(nav, from, false);
+  nav.offsetWidth; // başlangıç yeri uygulansın, sonra kaysın
+  moveIndicator(nav, to, true);
+  releaseIndicator(nav, slideTime());
+}
+
+// Ana ekranlarda parmakla sürükleme: içerik (başlık ve sekmeler hariç) parmağı izler, sekme çizgisi
+// yandaki sekmeye doğru yol alır. Bırakınca ekranın dörtte birinden fazla sürüklendiyse ya da hızla
+// fırlatıldıysa içerik o yöne kayıp çıkar ve yandaki sekme açılır; değilse yerine döner. Uçlarda
+// (Ana Sayfa'da sağa, Ayarlar'da sola) içerik esner. "Hareketi azalt" açıksa sayfa sürüklenmez,
+// bırakınca doğrudan geçer. Sayfanın tamamı dinlenir: kısa bir ekranın boş alt kısmı main'in dışında kalır.
+const neighbor = (dx) => TABS[TABS.indexOf(shownTab) + (dx < 0 ? 1 : -1)];
+
+listenForSwipes(document, {
+  start(target) {
+    if (!shownTab || settling || leaving || paused) return false;
+    const tabs = target.closest?.('.tabs');
+    return !(tabs && tabs.scrollWidth > tabs.clientWidth); // taşan sekme çubuğu kendi içinde kayar
+  },
+
+  move(dx) {
+    const container = app.firstElementChild;
+    if (!motionAllowed() || !container) return;
+    const next = neighbor(dx);
+    const offset = next ? dx : stretch(dx);
+    container.classList.add('swipe-drag');
+    container.style.setProperty('--drag-x', `${offset}px`);
+    const nav = container.querySelector('.tabs');
+    if (!nav) return;
+    const links = [...nav.querySelectorAll('.tab')];
+    const from = tabBox(links[TABS.indexOf(shownTab)]);
+    if (next) {
+      const to = tabBox(links[TABS.indexOf(next)]);
+      const part = Math.min(Math.abs(dx) / window.innerWidth, 1);
+      moveIndicator(nav, { left: from.left + (to.left - from.left) * part, width: from.width + (to.width - from.width) * part }, false);
+    } else {
+      moveIndicator(nav, { left: from.left + offset / 4, width: from.width }, false);
+    }
+  },
+
+  end(direction) {
+    const next = direction && neighbor(direction === 'left' ? -1 : 1);
+    const container = app.firstElementChild;
+    if (!container?.classList.contains('swipe-drag')) {
+      if (next) navigate(next, '', 'tab'); // "hareketi azalt": doğrudan geçer
+      return;
+    }
+    settling = true;
+    container.classList.replace('swipe-drag', 'swipe-settle');
+    container.style.setProperty('--drag-x', next ? (direction === 'left' ? '-100%' : '100%') : '0px');
+    const nav = container.querySelector('.tabs');
+    if (nav) moveIndicator(nav, tabBox(nav.querySelectorAll('.tab')[TABS.indexOf(next ?? shownTab)]), true);
+    setTimeout(() => {
+      settling = false;
+      if (next) {
+        slide = direction;
+        navigate(next, '', 'tab');
+        return;
+      }
+      container.classList.remove('swipe-settle');
+      container.style.removeProperty('--drag-x');
+      if (nav) releaseIndicator(nav, 0);
+    }, slideTime());
+  },
 });
 
 let updating = false; // "Güncelle" onaylandı: yeni sürüm etkinleşince sayfa yenilenir

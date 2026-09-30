@@ -24,7 +24,8 @@ const TABS = [
 // kullanılmaz, çünkü ana sayfa boş ve bilinmeyen adreslerde de açılır. Açık ekranın sekmesi
 // aria-current="page" taşır ve görünüşü de bu öznitelikten gelir. Sekmeler bağlantıdır: ekran
 // değişirken beforeLeave yine çalışır; data-nav="tab" ile sekme değişimi geçmişe kayıt eklemez
-// (main.js, navigate). Ana Sayfa'da uygulama adı sayfanın başlığıdır (h1).
+// (main.js, navigate). Ana Sayfa'da uygulama adı sayfanın başlığıdır (h1). .tab-indicator, sekme
+// değişirken ve parmakla sürüklerken kayan çizgidir (main.js); durağan çizgi CSS'tedir.
 export function appHeader(current) {
   const tag = current === '#/' ? 'h1' : 'p';
   return `
@@ -33,6 +34,7 @@ export function appHeader(current) {
       <nav class="tabs" aria-label="Ana gezinme">
         ${TABS.map(([href, label]) =>
           `<a class="tab" href="${href}" data-nav="tab"${href === current ? ' aria-current="page"' : ''}>${label}</a>`).join('')}
+        <span class="tab-indicator" aria-hidden="true"></span>
       </nav>
     </header>`;
 }
