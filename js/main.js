@@ -4,7 +4,7 @@
 // #/program/<gün>/<satır> satır (yeni satır: #/program/<gün>/yeni), #/ayarlar ayarlar.
 // Tarayıcı geçmişi telefona yüklenen bir uygulamadaki gibi tutulur (navigate); dört ana ekranda
 // parmakla kaydırınca sekme değişir.
-import { initStore, screenChanged, waitForWrites } from './store.js';
+import { initStore, screenChanged, stopWrites, waitForWrites } from './store.js';
 import { listenForSwipes } from './swipe.js';
 import { renderHistory, renderSessionDetail } from './views/history.js';
 import { renderHome } from './views/home.js';
@@ -17,6 +17,7 @@ const app = document.getElementById('app');
 const TABS = ['#/', '#/gecmis', '#/ilerleme', '#/ayarlar']; // sekme sırası; kaydırma bu sırayla gezer
 let view = null; // { beforeLeave?(), flush?(), hasUnsavedChanges?(), destroy?() }; beforeLeave söz dönebilir
 let leaving = false; // açık ekran, çıkmadan önce yazmasının sonucunu bekliyor
+let paused = false; // uygulama başka bir pencerede açıldı: bu pencere durdu (claimWindow)
 let shownHash = null;
 let shownRoute = null; // açık ekranın rotası; ana sayfa boş ve bilinmeyen adreste de '#/'
 let shownTab = null; // açık ana ekranın sekmesi; alt ekranlarda null
@@ -52,6 +53,7 @@ function navigate(hash, message = '', mode = 'push') {
 }
 
 async function show() {
+  if (paused) return;
   view?.destroy?.();
   view = null;
   screenChanged(); // önceki ekranın başarısız yazması "Güncelle"yi artık engellemez (store.js, waitForWrites)
@@ -101,6 +103,7 @@ async function show() {
 // Ekran değişmeden önce açık ekran bekleyen değişikliğini yazar; gerekirse kullanıcıya sorar. Yazma
 // sürüyorsa beforeLeave söz döner: sonuç gelene kadar açık ekran durur, yeni ekran açılmaz.
 window.addEventListener('hashchange', async () => {
+  if (paused) return;
   if (location.hash === shownHash) {
     // Aşağıda geri alınan adres: yeni kayıt, açık ekranın kaydı gibi işaretlenir.
     if (history.state === null) history.replaceState({ from: shownFrom }, '');
@@ -144,11 +147,14 @@ listenForSwipes(document, (direction, target) => {
   navigate(next, '', 'tab');
 });
 
+let updating = false; // "Güncelle" onaylandı: yeni sürüm etkinleşince sayfa yenilenir
+let reloading = false; // güncellemenin yenilemesi: kaydedilmemiş değişiklik "Güncelle"de soruldu
+
 // Sayfa kapanırken ya da yenilenirken: bekleyen değişiklik hemen yazılmaya başlar; bekleyen ya da
 // başarısız bir yazma varsa tarayıcı uyarı gösterir (her tarayıcı desteklemez).
 window.addEventListener('beforeunload', (event) => {
   view?.flush?.();
-  if (view?.hasUnsavedChanges?.()) {
+  if (!reloading && view?.hasUnsavedChanges?.()) {
     event.preventDefault();
     event.returnValue = '';
   }
@@ -175,33 +181,85 @@ async function setupServiceWorker() {
   });
 }
 
-let updating = false;
-
-// "Güncelle": önce bekleyen kayıtlar yazılır; yazma başarısız olduysa güncellenmez.
+// "Güncelle": yeni sürüm etkinleşmeden önce açık ekran korunur. Bekleyen kayıtlar yazılır; açık
+// ekranın yazması başarısızsa güncellenmez. Kaydedilmemiş düzenleme varsa (geçmiş düzenleme, satır
+// formu) ekrandan çıkarken olduğu gibi sorulur; vazgeçilirse güncellenmez, değerler formda kalır.
 function showUpdateBanner(worker) {
   const banner = document.getElementById('update-banner');
   const text = document.getElementById('update-text');
   const button = document.getElementById('update-button');
   banner.hidden = false;
+  const stop = (message) => {
+    text.textContent = message;
+    button.disabled = false;
+  };
+  const writesSaved = async () => {
+    view?.flush?.();
+    return waitForWrites();
+  };
   button.onclick = async () => {
     button.disabled = true;
     text.textContent = 'Kayıtlar tamamlanıyor…';
-    view?.flush?.();
-    if (!(await waitForWrites())) {
-      text.textContent = 'Son değişiklikler kaydedilemediği için güncellenmedi. Önce kaydı tamamlayın.';
-      button.disabled = false;
-      return;
-    }
+    const failed = 'Son değişiklikler kaydedilemediği için güncellenmedi. Önce kaydı tamamlayın.';
+    if (!(await writesSaved())) return stop(failed);
+    if (view?.hasUnsavedChanges?.() && !(await (view.beforeLeave?.() ?? true))) return stop('Yeni sürüm var.');
+    if (!(await writesSaved())) return stop(failed); // sorarken başlayan yazma da beklenir
     updating = true;
     worker.postMessage('skip-waiting');
   };
 }
 
 navigator.serviceWorker?.addEventListener('controllerchange', () => {
-  if (updating) location.reload();
+  if (!updating) return;
+  reloading = true;
+  location.reload();
 });
 
+// Uygulama aynı anda tek pencerede çalışır: açılan pencere kilidi önceki pencereden alır, önceki pencere
+// durur ve yazmaz. Böylece iki pencere (ör. telefonda uygulama ve tarayıcı sekmesi) birbirinin taslağını
+// ve programını ezmez. Tarayıcı kilidi desteklemiyorsa denetim yoktur.
+function claimWindow() {
+  return new Promise((resolve) => {
+    if (!navigator.locks) {
+      resolve();
+      return;
+    }
+    navigator.locks
+      .request('antrenman-takibi', { steal: true }, () => {
+        resolve();
+        return new Promise(() => {}); // pencere açık kaldıkça tutulur
+      })
+      .catch((error) => {
+        resolve(); // kilit alınamadıysa uygulama yine açılır
+        if (error?.name === 'AbortError') pause(); // kilidi başka pencere aldı
+      });
+  });
+}
+
+// Bu pencere durur: yazma kesilir, açık ekran kapanır. "Burada devam et" sayfayı yeniler; yenilenen
+// pencere kilidi geri alır ve bu kez öteki pencere durur.
+function pause() {
+  if (paused) return;
+  paused = true;
+  stopWrites();
+  view?.destroy?.();
+  view = null;
+  showCount++; // yüklenmekte olan ekran açılmasın
+  const section = document.createElement('section');
+  section.className = 'card conflict';
+  section.setAttribute('aria-labelledby', 'paused-title');
+  section.innerHTML = `
+    <h1 id="paused-title">Uygulama başka bir pencerede açık</h1>
+    <p class="muted">İki pencere aynı anda kaydedip birbirinin değerlerini silmesin diye bu pencere durdu. Burada devam ederseniz öteki pencere durur.</p>
+    <div class="conflict-actions">
+      <button type="button" class="button primary">Burada devam et</button>
+    </div>`;
+  section.querySelector('button').addEventListener('click', () => location.reload());
+  app.replaceChildren(section);
+}
+
 try {
+  await claimWindow();
   await initStore();
   await show();
   setupServiceWorker().catch((error) => console.warn('Service worker kurulamadı', error));

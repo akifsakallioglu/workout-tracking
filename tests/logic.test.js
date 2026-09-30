@@ -67,6 +67,7 @@ import {
   withoutEquipment,
   withoutItem,
 } from '../js/logic.js';
+import { put } from '../js/db.js';
 import { program as seed } from '../js/seed.js';
 
 const KEY = { dayId: 'push', exerciseId: 'rope-pushdown', equipmentId: 'kablo' };
@@ -473,7 +474,123 @@ test('bozuk ya da yabancı yedek reddediliyor', () => {
   assertEqual(broken((backup) => { backup.sessions[1].id = 'bitti'; }), 'Yedek dosyası bozuk: 2. antrenman okunamadı.');
   assertEqual(broken((backup) => { backup.sessions[0].entries[0].sets[0].reps = 1.5; }), 'Yedek dosyası bozuk: 1. antrenman okunamadı.');
   assertEqual(broken((backup) => { backup.sessions[1].draft.cards[0].reps = [12]; }), 'Yedek dosyası bozuk: 2. antrenman okunamadı.');
+  // Kaydın seçenekleri ve setleri: düzenleme ve ayrıntı ekranı bunlara dayanır.
+  assertEqual(broken((backup) => { delete backup.sessions[0].entries[0].options; }), 'Yedek dosyası bozuk: 1. antrenman okunamadı.');
+  assertEqual(broken((backup) => { backup.sessions[0].entries[0].options = []; }), 'Yedek dosyası bozuk: 1. antrenman okunamadı.');
+  assertEqual(broken((backup) => { backup.sessions[0].entries[0].options = 'rope-pushdown'; }), 'Yedek dosyası bozuk: 1. antrenman okunamadı.');
+  assertEqual(broken((backup) => { backup.sessions[0].entries[0].sets = []; }), 'Yedek dosyası bozuk: 1. antrenman okunamadı.');
+  // Taslak kartı programdaki hareketlere bağlıdır: antrenman ekranı onları katalogdan okur.
+  const draftMismatch = 'Yedek dosyası bozuk: 2. antrenmanın taslağı programla uyuşmuyor.';
+  assertEqual(broken((backup) => { backup.sessions[1].draft.cards[0].exerciseId = 'olmayan-hareket'; }), draftMismatch);
+  // (kartın item'ı başlangıç programındaki nesnedir; yerinde değiştirilmez)
+  const withOptions = (options) => (backup) => {
+    const [card] = backup.sessions[1].draft.cards;
+    card.item = { ...card.item, options };
+  };
+  assertEqual(broken(withOptions(['rope-pushdown', 'olmayan-hareket'])), draftMismatch);
+  assertEqual(broken(withOptions(['cable-fly'])), draftMismatch);
+  assertEqual(
+    broken((backup) => { backup.sessions.push({ ...structuredClone(backup.sessions[1]), id: 'ikinci', dayId: 'legs' }); }),
+    'Yedek dosyası bozuk: birden çok devam eden antrenman var.',
+  );
 });
+
+test('uygulamanın ürettiği geçerli yedekler kabul ediliyor', () => {
+  const accepted = (backup) => parseBackup(JSON.stringify(backup)).error;
+  // Satırı programdan kaldırılmış hareketin geçmiş kaydı (hareket katalogda kalır).
+  const backup = sampleBackup();
+  backup.program = withoutItem(backup.program, 'push', backup.program.days[0].items[4].id);
+  assertEqual(accepted(backup), undefined, 'programda olmayan hareketin kaydı');
+  // "+ Hareket ekle" kartı: yeni hareket katalogda, satırı yalnızca bu antrenmanda.
+  const extra = sampleBackup();
+  extra.program = withExercise(extra.program, 'ex-1', 'Cable Curl');
+  extra.sessions[1].draft.cards.push({
+    item: { id: 'extra-1', options: ['ex-1'], sets: 3, repMin: 12, repMax: 12 },
+    exerciseId: 'ex-1',
+    equipmentId: null,
+    weight: '',
+    reps: ['', '', ''],
+    extra: true,
+  });
+  assertEqual(accepted(extra), undefined, '"+ Hareket ekle" kartı');
+  // Eski sürüm (seedVersion'suz Aşama 1 programı); açılışta yükseltilir.
+  const old = buildBackup(
+    {
+      exercises: { 'rope-pushdown': { name: 'Rope Pushdown', equipment: [{ id: 'rope-pushdown-kablo', name: 'Kablo', unit: 'kg' }] } },
+      days: [{ id: 'push', name: 'Push', items: [{ id: 'push-rope-pushdown', options: ['rope-pushdown'], sets: 3, repMin: 12, repMax: 15 }] }],
+    },
+    [
+      session({ id: 'eski', date: '2026-09-20T12:00:00.000Z', equipmentId: 'rope-pushdown-kablo' }),
+      {
+        ...session({ id: 'eski-devam', date: '2026-09-21T12:00:00.000Z', finished: false }),
+        entries: [],
+        draft: {
+          cards: [{
+            item: { id: 'push-rope-pushdown', options: ['rope-pushdown'], sets: 3, repMin: 12, repMax: 15 },
+            exerciseId: 'rope-pushdown',
+            equipmentId: 'rope-pushdown-kablo',
+            weight: '50',
+            reps: ['12', '', ''],
+          }],
+        },
+      },
+    ],
+    '2026-09-21T13:00:00.000Z',
+  );
+  assertEqual(accepted(old), undefined, 'eski sürüm yedeği');
+});
+
+// ---------------------------------------------------------------- Veritabanı yazması (db.js)
+
+// Uygulamanın veritabanına dokunmayan, testten önce ve sonra silinen ayrı bir veritabanı: "ad" dizini
+// benzersizdir, aynı adla ikinci kayıt istek düzeyinde ConstraintError verir.
+async function withTestDatabase(use) {
+  const name = 'antrenman-takibi-birim-testi';
+  const remove = () => new Promise((resolve) => {
+    const request = indexedDB.deleteDatabase(name);
+    request.onsuccess = request.onerror = request.onblocked = () => resolve();
+  });
+  await remove();
+  const db = await new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('kayit', { keyPath: 'id' }).createIndex('ad', 'ad', { unique: true });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  try {
+    await use(db);
+  } finally {
+    db.close();
+    await remove();
+  }
+}
+
+test('yazma: istek düzeyindeki hata, hatanın kendisiyle reddedilir', () => withTestDatabase(async (db) => {
+  await put(db, 'kayit', { id: 1, ad: 'a' });
+  let rejected;
+  try {
+    await put(db, 'kayit', { id: 2, ad: 'a' });
+  } catch (error) {
+    rejected = error;
+  }
+  assertEqual(rejected?.name, 'ConstraintError');
+}));
+
+test('yazma: istekler verilir verilmez işlem tamamlanmaya başlar (commit)', () => withTestDatabase(async (db) => {
+  const original = IDBTransaction.prototype.commit;
+  if (!original) return; // tarayıcı desteklemiyor: kendiliğinden tamamlanır
+  let commits = 0;
+  IDBTransaction.prototype.commit = function () {
+    commits++;
+    return original.call(this);
+  };
+  try {
+    await put(db, 'kayit', { id: 1, ad: 'a' });
+  } finally {
+    IDBTransaction.prototype.commit = original;
+  }
+  assertEqual(commits, 1);
+}));
 
 test('yedek dosyasının adı yerel tarihi taşıyor', () => {
   assertEqual(backupFileName(new Date(2026, 8, 29, 23, 30)), 'antrenman-yedegi-2026-09-29.json');

@@ -62,10 +62,14 @@ function write(db, storeNames, operation) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeNames, 'readwrite', { durability: 'strict' });
     transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
+    // Başarısız bir istek işlemi geri alır; hata o zaman transaction.error'dadır (isteğin hata olayı
+    // sırasında henüz boştur).
     transaction.onabort = () => reject(transaction.error ?? new Error('Yazma iptal edildi'));
     try {
       operation(...[storeNames].flat().map((name) => transaction.objectStore(name)));
+      // İstekler verildi: işlem kendiliğinden tamamlanmayı beklemeden hemen tamamlanmaya başlar
+      // (uygulama arka plana geçerken yazma daha çabuk biter). Eski tarayıcılarda yoktur.
+      transaction.commit?.();
     } catch (error) {
       // İşlemin yarısı yapılmışken hata çıkarsa hiçbir değişiklik kalmasın.
       transaction.abort();

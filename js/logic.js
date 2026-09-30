@@ -218,6 +218,16 @@ export function usedEquipmentIds(sessions) {
   return new Set(sessions.flatMap((session) => session.entries.map((entry) => entry.equipmentId)));
 }
 
+// Program yükseltmesinde korunacak makineler: kayıtlarda kullanılanlar ve devam eden antrenmanın
+// taslağında seçili olanlar (antrenman bitince kayda girecek).
+export function equipmentInUse(sessions) {
+  const used = usedEquipmentIds(sessions);
+  for (const session of sessions) {
+    for (const card of session.draft?.cards ?? []) if (card.equipmentId) used.add(card.equipmentId);
+  }
+  return used;
+}
+
 // Kayıtlı program, başlangıç programının eski bir sürümündense yükseltilir: günler yeni
 // programdan gelir, eksik hareketler eklenir, kullanıcının eklediği makineler ("eq-" ile başlar)
 // korunur. 3. sürümden önceki başlangıç programı her harekete varsayılan bir makine koyuyordu;
@@ -520,10 +530,18 @@ function backupError(data) {
 
   if (!Array.isArray(sessions)) return corrupt('antrenmanlar okunamadı');
   const ids = new Set();
+  // Taslak kartı programdaki hareketlere bağlıdır: antrenman ekranı onları katalogdan okur. Bitmiş
+  // kayıtların hareketleri katalogda aranmaz; kayıt, adını kendisi taşır.
+  const inCatalog = (exerciseId) => Object.hasOwn(program.exercises, exerciseId);
+  const validCard = (card) => card.item.options.includes(card.exerciseId) && card.item.options.every(inCatalog);
+  let unfinished = 0;
   for (const [index, session] of sessions.entries()) {
     if (!isSession(session) || ids.has(session.id)) return corrupt(`${index + 1}. antrenman okunamadı`);
     ids.add(session.id);
+    if (session.draft && !session.draft.cards.every(validCard)) return corrupt(`${index + 1}. antrenmanın taslağı programla uyuşmuyor`);
+    if (!session.finishedAt) unfinished++;
   }
+  if (unfinished > 1) return corrupt('birden çok devam eden antrenman var');
   return '';
 }
 
@@ -535,8 +553,8 @@ const isCount = (value) => Number.isInteger(value) && value > 0;
 const isUnit = (value) => Object.hasOwn(UNIT_LABELS, value);
 const isTarget = (target) =>
   isObject(target) && isCount(target.sets) && isCount(target.repMin) && isCount(target.repMax) && target.repMax >= target.repMin;
-const isItem = (item) =>
-  isTarget(item) && isText(item.id) && Array.isArray(item.options) && item.options.length > 0 && item.options.every(isText);
+const isOptions = (options) => Array.isArray(options) && options.length > 0 && options.every(isText);
+const isItem = (item) => isTarget(item) && isText(item.id) && isOptions(item.options);
 const isEquipment = (equipment) =>
   isObject(equipment) && isText(equipment.id) && isText(equipment.name) && isUnit(equipment.unit);
 const isSet = (set) => isObject(set) && isCount(set.reps) && (set.weight === null || (typeof set.weight === 'number' && set.weight > 0));
@@ -547,8 +565,10 @@ const isEntry = (entry) =>
   isText(entry.name) &&
   isText(entry.equipmentName) &&
   isUnit(entry.unit) &&
+  isOptions(entry.options) &&
   isTarget(entry.target) &&
   Array.isArray(entry.sets) &&
+  entry.sets.length > 0 && // seti girilmemiş hareket kayda yazılmaz
   entry.sets.every(isSet);
 const isDraftCard = (card) =>
   isObject(card) &&

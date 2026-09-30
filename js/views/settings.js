@@ -85,30 +85,43 @@ export async function renderSettings(container) {
       : 'Kalıcı depolama: kapalı. Tarayıcı, cihazda yer azalırsa verileri silebilir.';
   }
 
+  // Tarayıcı indirmenin ya da paylaşılan dosyanın gerçekten kaydedildiğini bildirmez: mesaj bunu
+  // denetlemeyi söyler. Son yedek tarihi indirme ya da paylaşım başlayınca yazılır; ekranda ancak
+  // yazıldıktan sonra görünür.
   async function exportBackup(share) {
     state.busy = true;
     render();
+    let started = '';
     try {
       const [program, sessions] = await Promise.all([loadProgram(), loadSessions()]);
       const now = new Date();
       const text = JSON.stringify(buildBackup(program, sessions, now.toISOString()), null, 2);
       const file = new File([text], backupFileName(now), { type: 'application/json' });
+      const summary = `${file.name} (${sessions.length} antrenman)`;
       if (share) {
         try {
           await navigator.share({ files: [file], title: 'Antrenman yedeği' });
         } catch (error) {
-          if (error.name === 'AbortError') return; // kullanıcı paylaşmaktan vazgeçti
-          throw error;
+          if (error.name !== 'AbortError') { // AbortError: kullanıcı paylaşmaktan vazgeçti
+            console.warn('Yedek paylaşılamadı', error);
+            state.backupMessage = 'Yedek paylaşılamadı. "Yedeği indir" ile deneyin.';
+          }
+          return;
         }
+        started = `Yedek paylaşıldı: ${summary}. Dosyanın seçtiğiniz yere kaydedildiğini denetleyin.`;
       } else {
         download(file);
+        started = `İndirme başlatıldı: ${summary}. Dosyanın kaydedildiğini denetleyin.`;
       }
-      state.settings = { ...state.settings, lastBackupAt: now.toISOString() };
-      await saveSettings(state.settings);
-      state.backupMessage = `Yedek hazırlandı: ${file.name} (${sessions.length} antrenman).`;
+      const settings = { ...state.settings, lastBackupAt: now.toISOString() };
+      await saveSettings(settings);
+      state.settings = settings;
+      state.backupMessage = started;
     } catch (error) {
       console.warn('Yedek alınamadı', error);
-      state.backupMessage = `Yedek alınamadı. ${errorReason(error)}`;
+      state.backupMessage = started
+        ? `${started} Son yedek tarihi kaydedilemedi. ${errorReason(error)}`
+        : `Yedek alınamadı. ${errorReason(error)}`;
     } finally {
       state.busy = false;
       render();
@@ -124,7 +137,17 @@ export async function renderSettings(container) {
       render();
       return;
     }
-    const { backup, error } = parseBackup(await file.text());
+    let text;
+    try {
+      text = await file.text();
+    } catch (readError) {
+      console.warn('Yedek dosyası okunamadı', readError);
+      state.restoreMessage = 'Dosya okunamadı. Hiçbir şey değiştirilmedi.';
+      state.restoreFailed = true;
+      render();
+      return;
+    }
+    const { backup, error } = parseBackup(text);
     if (error) {
       state.restoreMessage = `${error} Hiçbir şey değiştirilmedi.`;
       state.restoreFailed = true;

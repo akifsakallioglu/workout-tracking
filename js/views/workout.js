@@ -123,8 +123,6 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
   const active = editing ? null : activeSession(sessions);
   if (active && active.dayId !== day.id) return renderConflict(container, { active, day, program, navigate });
 
-  const available = (exercise, equipmentId) =>
-    exercise.equipment.some((equipment) => equipment.id === equipmentId && !equipment.archived);
   // exercises: antrenman sırasında yeni hareket eklendiyse güncel katalog.
   const newCard = (item, exercises = program.exercises) => {
     // Dönüşümlü satırda önerilen hareket seçili gelir; tek hareketli satırda o hareket.
@@ -143,15 +141,16 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       extra: false, // "+ Hareket ekle" ile yalnızca bu antrenmana eklendi
     };
   };
-  // Devam eden antrenmanın taslağından kart; hedef, antrenman başlarken kopyalanan hâlidir.
+  // Devam eden antrenmanın taslağından kart; hedef, antrenman başlarken kopyalanan hâlidir. Seçili makine
+  // sonradan arşivlendiyse (ör. program yükseltmesinde) seçili kalır ve "(silinmiş)" olarak görünür.
   const cardFromDraft = (draft) => {
     const exercise = program.exercises[draft.exerciseId];
+    const selected = exercise.equipment.find((equipment) => equipment.id === draft.equipmentId);
     return {
       ...newCard(draft.item),
       exerciseId: draft.exerciseId,
-      equipmentId: available(exercise, draft.equipmentId)
-        ? draft.equipmentId
-        : defaultEquipmentId(sessions, day.id, draft.exerciseId, exercise),
+      equipmentId: selected ? draft.equipmentId : defaultEquipmentId(sessions, day.id, draft.exerciseId, exercise),
+      ...(selected?.archived ? { keepEquipmentId: selected.id } : {}),
       weight: draft.weight,
       reps: [...draft.reps],
       extra: Boolean(draft.extra),
@@ -179,7 +178,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     dirty: false, // düzenleme modunda kaydedilmemiş değişiklik var mı
     sessionId: editing?.id ?? active?.id ?? createId(),
     startedAt: editing?.startedAt ?? active?.startedAt ?? new Date().toISOString(),
-    persisted: Boolean(active), // antrenman veritabanında "devam ediyor" olarak var mı
+    persisted: Boolean(active), // antrenman "devam ediyor" olarak yazıldı ya da yazılması istendi mi
     cards,
     message: '',
     busy: false,
@@ -353,9 +352,10 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       return;
     }
     state.writeContext = context;
+    // Yazma istendi: ilk yazma bitmeden değer silinse de bundan sonraki hâl yazılır, "İptal" de siler.
+    state.persisted = true;
     try {
       await saveSession(draftSession());
-      state.persisted = true;
       if (state.retry === saveNow) state.retry = null;
     } catch (error) {
       // Değerler ekranda kalır; bir sonraki değişiklikte ya da "Tekrar dene" ile yeniden yazılır.
@@ -419,8 +419,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       // Yazmalar tek sıradan geçtiği için bekleyen taslak yazmaları bu yazmadan önce biter.
       await saveSession(session);
       state.saved = true;
-      // İlk bitirilen antrenmandan sonra tarayıcıdan verileri kendiliğinden silmemesi istenir.
-      requestPersistentStorage().catch((error) => console.warn('Kalıcı depolama istenemedi', error));
+      keepDataOnDevice();
       navigate('#/', `${day.name} antrenmanı kaydedildi ✓`, 'up');
     } catch (error) {
       console.warn('Antrenman bitirilemedi', error);
@@ -916,8 +915,12 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     }
   });
 
+  // Uygulama arka plana geçerken (ekran kilitlenince): bekleyen değişiklik hemen yazılır; son taslak
+  // yazması başarısız olduysa yeniden denenir. Bitir, İptal ve makine işlemleri kendiliğinden denenmez.
   const onVisibilityChange = () => {
-    if (document.visibilityState === 'hidden') flush();
+    if (document.visibilityState !== 'hidden') return;
+    if (state.retry === saveNow) saveNow();
+    else flush();
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('pagehide', flush);
@@ -949,6 +952,11 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       window.removeEventListener('pagehide', flush);
     },
   };
+}
+
+// Antrenman bitirilince tarayıcıdan verileri kendiliğinden (örneğin yer darlığında) silmemesi istenir.
+function keepDataOnDevice() {
+  requestPersistentStorage().catch((error) => console.warn('Kalıcı depolama istenemedi', error));
 }
 
 // Başka bir günün antrenmanı devam ederken yeni gün açılınca: devam et, bitir ya da sil.
@@ -1007,7 +1015,10 @@ function renderConflict(container, { active, day, program, navigate }) {
         day: { id: active.dayId, name: active.dayName },
         entries,
       });
-      run(() => saveSession(finished), `${active.dayName} antrenmanı bitirilemedi.`);
+      run(async () => {
+        await saveSession(finished);
+        keepDataOnDevice();
+      }, `${active.dayName} antrenmanı bitirilemedi.`);
     } else if (action === 'delete-active') {
       if (!confirm(`${active.dayName} antrenmanındaki bütün değerler silinecek. Emin misiniz?`)) return;
       run(() => deleteSession(active.id), `${active.dayName} antrenmanı silinemedi.`);

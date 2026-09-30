@@ -41,7 +41,8 @@ FAIL_WRITES_SCRIPT = """
 """
 
 # window.__failWritesLater true iken IndexedDB yazması (put ya da delete) yapılır, sonra işlem geri alınır:
-# hata, gerçek yazma hatalarındaki gibi işlem çalışınca (gecikmeli) gelir.
+# hata, gerçek yazma hatalarındaki gibi işlem çalışınca (gecikmeli) gelir. Geri alınabilsin diye o sırada
+# işlem erkenden tamamlanmaz (commit atlanır).
 FAIL_WRITES_LATER_SCRIPT = """
 (() => {
   for (const method of ['put', 'delete']) {
@@ -50,6 +51,12 @@ FAIL_WRITES_LATER_SCRIPT = """
       const request = original.apply(this, args);
       if (window.__failWritesLater) request.addEventListener('success', () => this.transaction.abort());
       return request;
+    };
+  }
+  const commit = IDBTransaction.prototype.commit;
+  if (commit) {
+    IDBTransaction.prototype.commit = function () {
+      if (!window.__failWritesLater) return commit.call(this);
     };
   }
 })();
@@ -72,6 +79,31 @@ HOLD_WRITES_SCRIPT = """
     transaction.oncomplete = () => db.close();
   };
 })
+"""
+
+# Bağlantı denemeleri: window.__closeConnections() uygulamanın açık IndexedDB bağlantılarını kapatır
+# (tarayıcının bağlantıyı kapatmasını taklit eder; veritabanının sürümü değişmez). __failOpen true iken
+# veritabanı açılamaz; __openCount açma denemelerini sayar. __failWritesWith = 'QuotaExceededError' gibi
+# bir ad verilince yazma o hatayı verir.
+CONNECTION_SCRIPT = """
+(() => {
+  const connections = [];
+  window.__openCount = 0;
+  const open = IDBFactory.prototype.open;
+  IDBFactory.prototype.open = function (...args) {
+    window.__openCount++;
+    if (window.__failOpen) throw new DOMException('Test: veritabanı açılamadı', 'UnknownError');
+    const request = open.apply(this, args);
+    request.addEventListener('success', () => connections.push(request.result));
+    return request;
+  };
+  window.__closeConnections = () => { for (const db of connections) db.close(); };
+  const put = IDBObjectStore.prototype.put;
+  IDBObjectStore.prototype.put = function (...args) {
+    if (window.__failWritesWith) throw new DOMException('Test: yazma hatası', window.__failWritesWith);
+    return put.apply(this, args);
+  };
+})();
 """
 
 READ_SCRIPT = """
@@ -628,6 +660,22 @@ def autosave_steps(run):
         draft = next(card for card in unfinished(page)[0]["draft"]["cards"] if card["exerciseId"] == "rope-pushdown")
         assert draft["reps"] == ["12", "11", ""], draft
 
+    def hidden_retries_failed_write(page):
+        rope = card(page, "Rope Pushdown")
+        page.evaluate("window.__failWrites = true")
+        reps(rope, 3).fill("9")
+        expect(save_status(page)).to_contain_text("Kaydedilemedi.")
+        page.evaluate("window.__failWrites = false")
+        # Uygulama arka plana geçiyor (ekran kilitlendi): son yazma hatalıysa yeniden denenir.
+        page.evaluate("""() => {
+          Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+          document.dispatchEvent(new Event('visibilitychange'));
+          delete document.visibilityState;
+        }""")
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        draft = next(card for card in unfinished(page)[0]["draft"]["cards"] if card["exerciseId"] == "rope-pushdown")
+        assert draft["reps"] == ["12", "11", "9"], draft
+
     def finish_blocked_by_error(page):
         rope = card(page, "Rope Pushdown")
         page.evaluate("window.__failWrites = true")
@@ -707,6 +755,11 @@ def autosave_steps(run):
         assert unfinished(page) == [], "Pull antrenmanı silinmeliydi"
 
     def conflict_finish(page):
+        page.evaluate("""() => {
+          window.__persistRequests = 0;
+          navigator.storage.persisted = async () => false;
+          navigator.storage.persist = async () => { window.__persistRequests++; return false; };
+        }""")
         press = card(page, "Leg Press")
         add_machine(press, "Makine", "kg")
         log_sets(press, "100", ["12", "12"])
@@ -717,6 +770,7 @@ def autosave_steps(run):
         expect(page.locator(".topbar h1")).to_have_text("Upper")
         legs = [session for session in sessions(page) if session["dayId"] == "legs"]
         assert legs and legs[0]["finishedAt"] and legs[0]["entries"][0]["name"] == "Leg Press", legs
+        assert page.evaluate("window.__persistRequests") == 1, "Bitirince kalıcı depolama istenmeliydi"
 
     def conflict_finish_with_problems(page):
         incline = card(page, "Incline Dumbbell Press")
@@ -746,12 +800,13 @@ def autosave_steps(run):
         ("Yazınca 'Kaydediliyor…' ve 'Kaydedildi ✓'; bitmemiş antrenman kaydediliyor", saves_while_typing),
         ("Sekme kapatılıp açılınca 'Devam et' ile değerler geliyor; bitmemiş antrenman sayılmıyor", resume_after_closing),
         ("Yazma hatası: 'Kaydedilemedi', değer ekranda; 'Tekrar dene' kaydediyor", write_error_and_retry),
+        ("Son yazma hatalıyken uygulama arka plana geçince yeniden deneniyor", hidden_retries_failed_write),
         ("Hata varken 'Bitir' antrenmanı bitirmiyor; 'Tekrar dene' bitiriyor", finish_blocked_by_error),
         ("Beklemeden ekrandan çıkınca da son değer kaydediliyor", leaving_flushes),
         ("Çıkarken başlatılan yazma başarısız: ekran kapanmıyor, soruluyor; değer duruyor, 'Tekrar dene' kaydediyor",
          leaving_with_write_error),
         ("Başka gün açılınca soruluyor: 'Devam et' ve onaylı 'Sil'", conflict_continue_and_delete),
-        ("'Bitir ve … başla': önceki antrenman bitiyor, yeni gün açılıyor", conflict_finish),
+        ("'Bitir ve … başla': önceki antrenman bitiyor, kalıcı depolama isteniyor, yeni gün açılıyor", conflict_finish),
         ("Hatalı değerli antrenman oradan bitirilemiyor", conflict_finish_with_problems),
         ("'Antrenmanı iptal et' onay alıp siliyor", cancel_workout),
     ]
@@ -870,6 +925,43 @@ def ending_while_leaving_steps(run):
         expect(page.locator("#flash")).to_have_text("Antrenman iptal edildi.")
         assert unfinished(page) == [], "İptal edilen antrenman silinmeliydi"
 
+    def type_then_clear_while_first_write_waits(page):
+        # İlk değer yazılıyor; 0,5 sn dolunca istenen ilk yazma bekletiliyor ve bu sırada değer siliniyor.
+        open_day(page, "lower", "Lower")
+        first = page.locator("[data-card]").first
+        if first.locator("input[data-field='weight']").count() == 0:
+            add_machine(first, "Makine", "kg")
+            expect(save_status(page)).to_have_text("Makine eklendi ✓")
+        hold_writes(page)
+        weight_input(first).fill("30")
+        page.wait_for_timeout(800)
+        weight_input(first).fill("")
+        return first
+
+    def cancel_while_first_write_waits(page):
+        type_then_clear_while_first_write_waits(page)
+        dialogs = []
+        page.once("dialog", lambda dialog: (dialogs.append(dialog.message), dialog.accept()))
+        page.get_by_role("button", name="Antrenmanı iptal et").click()
+        release_writes(page)
+        expect(page.locator("#flash")).to_have_text("Antrenman iptal edildi.")
+        assert dialogs == ["Bu antrenman silinecek; girdiğiniz değerler geri gelmez. Emin misiniz?"], dialogs
+        expect(page.locator("#resume-title")).to_have_count(0)
+        assert unfinished(page) == [], "İptal edilen antrenman kalmamalı"
+
+    def leave_while_first_write_waits(page):
+        type_then_clear_while_first_write_waits(page)
+        page.get_by_role("link", name="Ana Sayfa").click()
+        page.wait_for_timeout(300)
+        release_writes(page)
+        expect(page.locator("#resume-title")).to_have_text("Lower")
+        [session] = unfinished(page)
+        assert all(card["weight"] == "" for card in session["draft"]["cards"]), "Silinen değer taslakta kalmamalı"
+        page.get_by_role("link", name="Devam et").click()
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Antrenmanı iptal et").click()
+        expect(page.locator("#flash")).to_have_text("Antrenman iptal edildi.")
+
     return [
         ("'Bitir' yazması sürerken çıkış: ekran yazma bitene kadar açık; antrenman son değeriyle bitiyor",
          finish_while_leaving),
@@ -878,6 +970,85 @@ def ending_while_leaving_steps(run):
         ("İptal yazması sürerken çıkış: ekran yazma bitene kadar açık; antrenman siliniyor", cancel_while_leaving),
         ("İptal sürerken çıkış ve gecikmeli hata: soruluyor, ekran kalıyor; antrenman duruyor, 'Tekrar dene' siliyor",
          cancel_fails_while_leaving),
+        ("İlk yazma sürerken değer silinip İptal: onay soruluyor, antrenman siliniyor", cancel_while_first_write_waits),
+        ("İlk yazma sürerken değer silinip çıkış: taslakta silinen değer kalmıyor", leave_while_first_write_waits),
+    ]
+
+
+# ---------------------------------------------------------------- IndexedDB bağlantısı kapanınca
+
+def open_count(page):
+    return page.evaluate("window.__openCount")
+
+
+def connection_steps(run):
+    def rope_reps(page):
+        [session] = unfinished(page)
+        return next(card for card in session["draft"]["cards"] if card["exerciseId"] == "rope-pushdown")["reps"]
+
+    def workout_in_progress(page):
+        page.goto(run.base_url + "/")
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        log_sets(rope, "50", ["12"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+
+    def reopens_closed_connection(page):
+        page.evaluate("window.__closeConnections()")
+        opens = open_count(page)
+        reps(card(page, "Rope Pushdown"), 2).fill("11")
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        assert open_count(page) == opens + 1, f"Bağlantı bir kez yeniden açılmalıydı: {open_count(page) - opens}"
+        assert rope_reps(page)[1] == "11", rope_reps(page)
+        # Okumalar da: ekranlar açılıyor, yedek alınıyor.
+        page.evaluate("window.__closeConnections()")
+        go_home(page)
+        expect(page.locator("#resume-title")).to_have_text("Push")
+        page.evaluate("window.__closeConnections()")
+        page.get_by_role("link", name="Ayarlar").click()
+        with page.expect_download():
+            page.get_by_role("button", name="Yedeği indir").click()
+        expect(page.locator("#backup-message")).to_contain_text("İndirme başlatıldı")
+        page.get_by_role("link", name="Ana Sayfa").click()
+        page.get_by_role("link", name="Devam et").click()
+        expect(reps(card(page, "Rope Pushdown"), 2)).to_have_value("11")
+
+    def unrecoverable_keeps_values(page):
+        rope = card(page, "Rope Pushdown")
+        page.evaluate("window.__closeConnections(); window.__failOpen = true")
+        opens = open_count(page)
+        reps(rope, 3).fill("10")
+        expect(save_status(page)).to_contain_text("Kaydedilemedi. Tarayıcı veritabanına bağlanılamadı.")
+        expect(reps(rope, 3)).to_have_value("10")
+        page.wait_for_timeout(1000)
+        assert open_count(page) - opens == 1, f"Yeniden açma bir kez denenmeli: {open_count(page) - opens}"
+        page.evaluate("window.__failOpen = false")
+        page.get_by_role("button", name="Tekrar dene").click()
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        assert rope_reps(page)[2] == "10", rope_reps(page)
+
+    def other_errors_do_not_reopen(page):
+        rope = card(page, "Rope Pushdown")
+        opens = open_count(page)
+        page.evaluate("window.__failWritesWith = 'QuotaExceededError'")
+        reps(rope, 1).fill("13")
+        expect(save_status(page)).to_contain_text("Kaydedilemedi. Depolama alanı dolu.")
+        page.evaluate("window.__failWritesWith = 'DataCloneError'")
+        reps(rope, 1).fill("14")
+        expect(save_status(page)).to_contain_text("Kaydedilemedi. Tarayıcı veriyi yazamadı.")
+        assert open_count(page) == opens, "Kota ya da geçersiz veri hatasında bağlantı yeniden açılmamalı"
+        page.evaluate("window.__failWritesWith = null")
+        page.get_by_role("button", name="Tekrar dene").click()
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        assert rope_reps(page)[0] == "14", rope_reps(page)
+
+    return [
+        ("Veri: devam eden Push antrenmanı", workout_in_progress),
+        ("Bağlantı kapanınca bir kez yeniden açılıyor: kayıt, ekranlar ve yedek çalışıyor", reopens_closed_connection),
+        ("Bağlantı açılamazsa: değer ekranda, anlaşılır hata, tek deneme; açılınca 'Tekrar dene' kaydediyor",
+         unrecoverable_keeps_values),
+        ("Kota ve geçersiz veri hatası bağlantıyı yeniden açmıyor; kendi mesajıyla görünüyor", other_errors_do_not_reopen),
     ]
 
 
@@ -928,6 +1099,19 @@ def backup_steps(run):
         expect(save_status(page)).to_have_text("Kaydedildi ✓")
         go_home(page)
 
+    def backup_date_not_saved(page):
+        # Dosya indirildi ama son yedek tarihi yazılamadı: ekranda yeni tarih görünmemeli.
+        page.get_by_role("link", name="Ayarlar").click()
+        expect(page.locator("#last-backup")).to_have_text("Son yedek: henüz yedek alınmadı")
+        page.evaluate("window.__failWrites = true")
+        with page.expect_download() as info:
+            page.get_by_role("button", name="Yedeği indir").click()
+        expect(page.locator("#backup-message")).to_have_text(
+            f"İndirme başlatıldı: {info.value.suggested_filename} (2 antrenman). Dosyanın kaydedildiğini denetleyin. "
+            "Son yedek tarihi kaydedilemedi. Tarayıcı veriyi yazamadı.")
+        expect(page.locator("#last-backup")).to_have_text("Son yedek: henüz yedek alınmadı")
+        page.evaluate("window.__failWrites = false")
+
     def download_backup(page):
         page.get_by_role("link", name="Ayarlar").click()
         expect(page.get_by_role("heading", level=1)).to_have_text("Ayarlar")
@@ -944,10 +1128,30 @@ def backup_steps(run):
         assert (backup["app"], backup["backupVersion"], len(backup["sessions"])) == ("antrenman-takibi", 1, 2), backup.keys()
         assert sum(1 for session in backup["sessions"] if not session["finishedAt"]) == 1, "Devam eden antrenman da yedekte olmalı"
         assert backup["program"]["exercises"]["rope-pushdown"]["equipment"][0]["name"] == "Kablo"
-        expect(page.locator("#backup-message")).to_have_text(f"Yedek hazırlandı: {download.suggested_filename} (2 antrenman).")
+        expect(page.locator("#backup-message")).to_have_text(
+            f"İndirme başlatıldı: {download.suggested_filename} (2 antrenman). Dosyanın kaydedildiğini denetleyin.")
         expect(page.locator("#last-backup")).to_contain_text(f"Son yedek: {state['today']}")
         state["exported"] = snapshot(page)
         page.screenshot(path=str(ARTIFACTS / "asama4-ayarlar.png"), full_page=True)
+
+    def share_messages(page):
+        # "Paylaş…": başarılıysa tarih güncellenir; başarısızsa paylaşım hatası söylenir, tarih değişmez.
+        page.evaluate("""() => {
+          navigator.canShare = () => true;
+          navigator.share = () => (window.__shareFails
+            ? Promise.reject(new DOMException('Test: paylaşılamadı', 'NotAllowedError'))
+            : Promise.resolve());
+        }""")
+        page.get_by_role("link", name="Ana Sayfa").click()
+        page.get_by_role("link", name="Ayarlar").click()
+        page.get_by_role("button", name="Paylaş…").click()
+        expect(page.locator("#backup-message")).to_contain_text("Yedek paylaşıldı: antrenman-yedegi-")
+        expect(page.locator("#backup-message")).to_contain_text("Dosyanın seçtiğiniz yere kaydedildiğini denetleyin.")
+        shared_at = page.evaluate(READ_SCRIPT, ["meta", "settings"])["lastBackupAt"]
+        page.evaluate("window.__shareFails = true")
+        page.get_by_role("button", name="Paylaş…").click()
+        expect(page.locator("#backup-message")).to_have_text("Yedek paylaşılamadı. \"Yedeği indir\" ile deneyin.")
+        assert page.evaluate(READ_SCRIPT, ["meta", "settings"])["lastBackupAt"] == shared_at, "Tarih değişmemeli"
 
     def change_data(page):
         page.get_by_role("link", name="Ana Sayfa").click()
@@ -971,6 +1175,28 @@ def backup_steps(run):
         expect(page.locator("#restore-message")).to_have_text("Bu dosya bir Antrenman Takibi yedeği değil. Hiçbir şey değiştirilmedi.")
         expect(page.locator("#restore-summary")).to_have_count(0)
         assert snapshot(page) == state["changed"], "Bozuk dosya hiçbir şeyi değiştirmemeli"
+
+    def unreadable_file_rejected(page):
+        page.evaluate("""() => {
+          window.__originalText = Blob.prototype.text;
+          Blob.prototype.text = () => Promise.reject(new DOMException('Test: dosya okunamadı', 'NotReadableError'));
+        }""")
+        page.locator("#restore-file").set_input_files(state["backup_path"])
+        expect(page.locator("#restore-message")).to_have_text("Dosya okunamadı. Hiçbir şey değiştirilmedi.")
+        page.evaluate("() => { Blob.prototype.text = window.__originalText; }")
+        expect(page.locator("#restore-summary")).to_have_count(0)
+        assert snapshot(page) == state["changed"], "Okunamayan dosya hiçbir şeyi değiştirmemeli"
+
+    def broken_contents_rejected(page):
+        backup = json.loads(state["backup_path"].read_text(encoding="utf-8"))
+        index, active = next((i, s) for i, s in enumerate(backup["sessions"], start=1) if not s["finishedAt"])
+        active["draft"]["cards"][0]["exerciseId"] = "olmayan-hareket"
+        page.locator("#restore-file").set_input_files(
+            {"name": "bozuk-taslak.json", "mimeType": "application/json", "buffer": json.dumps(backup).encode("utf-8")})
+        expect(page.locator("#restore-message")).to_have_text(
+            f"Yedek dosyası bozuk: {index}. antrenmanın taslağı programla uyuşmuyor. Hiçbir şey değiştirilmedi.")
+        expect(page.locator("#restore-summary")).to_have_count(0)
+        assert snapshot(page) == state["changed"], "Bozuk yedek hiçbir şeyi değiştirmemeli"
 
     def summary_and_cancel(page):
         page.locator("#restore-file").set_input_files(state["backup_path"])
@@ -1003,6 +1229,20 @@ def backup_steps(run):
         go_home(page)
         assert stored_program(page)["exercises"]["cable-fly"]["equipment"] == [], "Yedekten sonra eklenen makine gitmeli"
 
+    def program_key_stays(page):
+        page.get_by_role("link", name="Ayarlar").click()
+        settings = page.evaluate(READ_SCRIPT, ["meta", "settings"])
+        backup = json.loads(state["backup_path"].read_text(encoding="utf-8"))
+        backup["program"]["key"] = "settings"
+        page.locator("#restore-file").set_input_files(
+            {"name": "anahtarli.json", "mimeType": "application/json", "buffer": json.dumps(backup).encode("utf-8")})
+        page.get_by_role("button", name="Geri yükle").click()
+        expect(page.locator("#restore-message")).to_have_text("Yedek geri yüklendi: 2 antrenman.")
+        assert page.evaluate(READ_SCRIPT, ["meta", "settings"]) == settings, "Ayarlar yerinde kalmalı"
+        assert snapshot(page) == state["exported"], "Program kendi anahtarına, yedektekiyle aynı yazılmalı"
+        page.get_by_role("link", name="Ana Sayfa").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+
     def reminders(page):
         expect(page.locator("#backup-reminder")).to_have_count(0)
         page.evaluate(PUT_SCRIPT, ["meta", {"key": "settings", "lastBackupAt": iso_days_ago(40)}])
@@ -1019,12 +1259,17 @@ def backup_steps(run):
 
     return [
         ("Veri oluşturuluyor: bitmiş Push ve devam eden Pull", create_data),
+        ("Son yedek tarihi yazılamazsa ekranda yeni tarih görünmüyor; mesaj bunu söylüyor", backup_date_not_saved),
         ("Yedek indiriliyor: dosya adı, içerik (devam eden dahil) ve son yedek tarihi", download_backup),
+        ("'Paylaş…': başarılıysa tarih güncelleniyor, başarısızsa paylaşım hatası söyleniyor", share_messages),
         ("Yedekten sonra veriler değiştiriliyor", change_data),
         ("Bozuk ve yabancı dosya reddediliyor; hiçbir şey değişmiyor", broken_files_rejected),
+        ("Okunamayan dosya: mesaj çıkıyor; hiçbir şey değişmiyor", unreadable_file_rejected),
+        ("Taslağı programla uyuşmayan yedek reddediliyor; hiçbir şey değişmiyor", broken_contents_rejected),
         ("Geri yükleme özeti gösteriliyor; 'Vazgeç' hiçbir şeyi değiştirmiyor", summary_and_cancel),
         ("Geri yükleme yarıda hata verirse eski veriler olduğu gibi kalıyor", failed_restore_changes_nothing),
         ("Geri yükleyince veri yedekle birebir aynı geliyor", restore_brings_back_same_data),
+        ("Yedekteki program.key programı başka anahtara taşıyamıyor; ayarlar yerinde kalıyor", program_key_stays),
         ("Hatırlatma: 30 günden eski yedek ve hiç alınmamış yedek", reminders),
     ]
 
@@ -2049,6 +2294,8 @@ def machine_management_steps(run):
 # ---------------------------------------------------------------- İnternetsiz çalışma ve güncelleme
 
 WAIT_FOR_CONTROLLER = "navigator.serviceWorker.controller !== null"
+# Yeni sürüm kuruldu ama henüz etkinleşmedi (bekliyor).
+WAITING_WORKER = "navigator.serviceWorker.getRegistration().then((registration) => registration.waiting !== null)"
 
 
 def offline_steps(run):
@@ -2090,6 +2337,8 @@ def offline_steps(run):
 
 
 def update_steps(base_url, app_copy):
+    state = {}
+
     def bump_version(version):
         sw = app_copy / "sw.js"
         text = sw.read_text(encoding="utf-8")
@@ -2104,6 +2353,10 @@ def update_steps(base_url, app_copy):
     def new_version_offered(page):
         page.goto(base_url + "/?sw=1")
         page.wait_for_function(WAIT_FOR_CONTROLLER)
+        # Başlangıçtaki gerçek önbellek: kopyadaki sw.js'in sürümüyle kurulan tek önbellek.
+        version = re.search(r"const VERSION = '([^']*)';", (app_copy / "sw.js").read_text(encoding="utf-8")).group(1)
+        state["old_cache"] = f"antrenman-{version}"
+        assert cache_names(page) == [state["old_cache"]], cache_names(page)
         open_day(page, "push", "Push")
         rope = card(page, "Rope Pushdown")
         add_machine(rope, "Kablo", "kg")
@@ -2124,7 +2377,8 @@ def update_steps(base_url, app_copy):
         expect(reps(card(page, "Rope Pushdown"), 1)).to_have_value("12")
         expect(page.locator("#update-banner")).to_be_hidden()
         names = cache_names(page)
-        assert "antrenman-test-2" in names and "antrenman-1" not in names, names
+        assert state["old_cache"] not in names, f"Eski önbellek silinmeliydi: {names}"
+        assert "antrenman-test-2" in names, f"Yeni sürümün önbelleği olmalıydı: {names}"
 
     def update_refused_on_write_error(page):
         rope = card(page, "Rope Pushdown")
@@ -2163,11 +2417,57 @@ def update_steps(base_url, app_copy):
             page.get_by_role("button", name="Güncelle").click()
         assert "antrenman-test-4" in cache_names(page)
 
+    def new_version_waiting(page, version):
+        bump_version(version)
+        check_for_update(page)
+        expect(page.locator("#update-banner")).to_be_visible()
+        page.wait_for_function(f"async () => {WAITING_WORKER}")
+
+    def update_asks_before_discarding(page, question, value, unsaved, saved, version):
+        # Kaydedilmemiş düzenleme: "Güncelle" yeni sürümü etkinleştirmeden önce uygulama içinde sorar.
+        new_version_waiting(page, version)
+        dialogs = []  # vazgeç: form, düğme ve bekleyen sürüm yerinde kalır
+        page.once("dialog", lambda dialog: (dialogs.append(f"{dialog.type}: {dialog.message}"), dialog.dismiss()))
+        page.get_by_role("button", name="Güncelle").click()
+        expect(page.get_by_role("button", name="Güncelle")).to_be_enabled()
+        assert dialogs == [f"confirm: {question}"], dialogs
+        expect(page.locator("#update-text")).to_have_text("Yeni sürüm var.")
+        expect(value(page)).to_have_value(unsaved)
+        assert page.evaluate(WAITING_WORKER), "Yeni sürüm etkinleşmemeliydi"
+        page.once("dialog", lambda dialog: dialog.accept())  # onay: değişiklik bırakılır
+        with page.expect_navigation():
+            page.get_by_role("button", name="Güncelle").click()
+        expect(value(page)).to_have_value(saved)
+        assert f"antrenman-{version}" in cache_names(page)
+
+    def update_with_unsaved_history_edit(page):
+        page.get_by_role("link", name="Devam et").click()
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        page.get_by_role("link", name="Geçmiş").click()
+        history_rows(page).first.click()
+        page.get_by_role("link", name="Düzenle").click()
+        weight = lambda page: weight_input(card(page, "Rope Pushdown"))  # noqa: E731
+        weight(page).fill("55")
+        update_asks_before_discarding(
+            page, "Değişiklikler kaydedilmedi ve kaybolacak. Çıkmak istiyor musunuz?", weight, "55", "50", "test-5")
+
+    def update_with_unsaved_row_form(page):
+        page.evaluate("location.hash = '#/program/push/push-rope-pushdown'")
+        expect(page.get_by_role("heading", level=1)).to_have_text("Satırı düzenle")
+        fill_target(page, "4", "15")
+        sets = lambda page: page.get_by_label("Set", exact=True)  # noqa: E731
+        update_asks_before_discarding(page, "Satırdaki değişiklikler kaydedilmedi. Çıkılsın mı?", sets, "4", "3", "test-6")
+
     return [
         ("Yeni sürüm yayınlanınca 'Yeni sürüm var: Güncelle' bandı çıkıyor", new_version_offered),
         ("'Güncelle' bekleyen kaydı önce bitiriyor, sonra yeni sürüme geçiyor", update_waits_for_pending_write),
         ("Kayıt hatası varken güncellenmiyor; kayıt tamamlanınca güncelleniyor", update_refused_on_write_error),
         ("Kapanan ekranın eski kayıt hatası 'Güncelle'yi engellemiyor", update_after_leaving_with_error),
+        ("Geçmiş düzenlemede kaydedilmemiş değişiklik: 'Güncelle' önce soruyor; vazgeçince değer ve düğme kalıyor",
+         update_with_unsaved_history_edit),
+        ("Satır formunda kaydedilmemiş değişiklik: 'Güncelle' önce soruyor; vazgeçince değer ve düğme kalıyor",
+         update_with_unsaved_row_form),
     ]
 
 
@@ -2396,6 +2696,133 @@ def phase2_upgrade_steps(run):
 
     return [
         ("Aşama 2 programı yükseltiliyor: varsayılan makineler listeden kalkıyor, kaydı olan arşivleniyor", upgraded),
+    ]
+
+
+# ---------------------------------------------------------------- Yükseltme: yazma hatası ve devam eden antrenman
+
+# Sayfa açılırken yazma hatası: sessionStorage'daki işaret, uygulama kodundan önce __failWrites'i açar.
+FAIL_WRITES_ON_OPEN_SCRIPT = FAIL_WRITES_SCRIPT + """
+if (sessionStorage.getItem('failWrites')) window.__failWrites = true;
+"""
+
+
+def upgrade_resilience_steps(run):
+    # Aşama 2 verisi: varsayılan makine yalnızca devam eden antrenmanın taslağında seçili (kaydı yok).
+    old = {
+        "program": {
+            "key": "program",
+            "seedVersion": 2,
+            "exercises": {
+                "machine-chest-press": {
+                    "name": "Machine Chest Press",
+                    "equipment": [{"id": "machine-chest-press-makine", "name": "Makine", "unit": "kg"}],
+                },
+            },
+            "days": [],
+        },
+        "sessions": [{
+            "id": "devam-eden",
+            "dayId": "push",
+            "dayName": "Push",
+            "startedAt": iso_days_ago(0),
+            "finishedAt": None,
+            "entries": [],
+            "draft": {"cards": [{
+                "item": {"id": "push-machine-chest-press", "options": ["machine-chest-press"], "sets": 3, "repMin": 12, "repMax": 12},
+                "exerciseId": "machine-chest-press",
+                "equipmentId": "machine-chest-press-makine",
+                "weight": "40",
+                "reps": ["12", "", ""],
+            }]},
+        }],
+    }
+
+    def install_old_data(page):
+        page.goto(run.base_url + "/tests/blank.html")
+        page.evaluate(PHASE1_DATABASE_SCRIPT, old)
+
+    def opens_when_upgrade_write_fails(page):
+        install_old_data(page)
+        page.evaluate("sessionStorage.setItem('failWrites', '1')")
+        page.goto(run.base_url + "/")
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+        expect(page.locator(".day-name")).to_have_count(5)
+        assert stored_program(page)["seedVersion"] == 2, "Yazma hatasında eski program yerinde kalmalı"
+        page.get_by_role("link", name="Ayarlar").click()
+        expect(page.get_by_role("heading", level=1)).to_have_text("Ayarlar")
+        page.evaluate("sessionStorage.removeItem('failWrites'); window.__failWrites = false")
+        page.get_by_role("link", name="Ana Sayfa").click()
+        expect(page.locator("#resume-title")).to_have_text("Push")
+        assert stored_program(page)["seedVersion"] == 3, "Yazma düzelince yükseltilen program kaydedilmeli"
+
+    def draft_keeps_machine(page):
+        install_old_data(page)
+        page.goto(run.base_url + "/")
+        expect(page.locator("#resume-title")).to_have_text("Push")
+        machines = stored_program(page)["exercises"]["machine-chest-press"]["equipment"]
+        assert machines == [{"id": "machine-chest-press-makine", "name": "Makine", "unit": "kg", "archived": True}], machines
+        page.get_by_role("link", name="Devam et").click()
+        chest = card(page, "Machine Chest Press")
+        expect(radio(chest, "Makine · kg (silinmiş)")).to_be_checked()
+        expect(weight_input(chest)).to_have_value("40")
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        [session] = sessions(page)
+        assert session["entries"][0]["equipmentId"] == "machine-chest-press-makine", session["entries"]
+
+    return [
+        ("Yükseltme yazılamazsa uygulama yine açılıyor; yazma düzelince yükseltilen program kaydediliyor",
+         opens_when_upgrade_write_fails),
+        ("Devam eden antrenmanda seçili eski makine yükseltmede silinmiyor, seçili kalıyor ve kayda giriyor",
+         draft_keeps_machine),
+    ]
+
+
+# ---------------------------------------------------------------- Aynı anda iki pencere
+
+INSTANCE_PAUSED = "Uygulama başka bir pencerede açık"
+
+
+def instance_steps(run):
+    def second_window_takes_over(page):
+        page.goto(run.base_url + "/")
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        log_sets(rope, "50", ["12"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        other = page.context.new_page()
+        try:
+            other.goto(run.base_url + "/")
+            other.get_by_role("link", name="Devam et").click()
+            other_rope = card(other, "Rope Pushdown")
+            expect(reps(other_rope, 1)).to_have_value("12")
+            # İlk pencere durdu: veriyi artık değiştiremez.
+            expect(page.get_by_role("heading", level=1)).to_have_text(INSTANCE_PAUSED)
+            expect(page.locator("[data-card]")).to_have_count(0)
+            for width in (390, 320):  # duran pencerenin ekranı: taşma ve dokunma alanı
+                page.set_viewport_size({"width": width, "height": PHONE["height"]})
+                assert page.evaluate(OVERFLOW_SCRIPT)["page"] <= 0, page.evaluate(OVERFLOW_SCRIPT)
+                assert page.evaluate(SMALL_TARGETS_SCRIPT) == [], page.evaluate(SMALL_TARGETS_SCRIPT)
+            page.set_viewport_size(PHONE)
+            reps(other_rope, 2).fill("11")
+            expect(save_status(other)).to_have_text("Kaydedildi ✓")
+            # İlk pencerede devam edilince ikincisi duruyor; ilk pencere ikincinin değerlerini görüyor.
+            page.get_by_role("button", name="Burada devam et").click()
+            expect(other.get_by_role("heading", level=1)).to_have_text(INSTANCE_PAUSED)
+            expect(reps(card(page, "Rope Pushdown"), 2)).to_have_value("11")
+            [session] = unfinished(page)
+            draft = next(card for card in session["draft"]["cards"] if card["exerciseId"] == "rope-pushdown")
+            assert draft["reps"] == ["12", "11", ""], draft
+            page.screenshot(path=str(ARTIFACTS / "iki-pencere.png"))
+            other.screenshot(path=str(ARTIFACTS / "iki-pencere-duran.png"))
+        finally:
+            other.close()
+
+    return [
+        ("İkinci pencere açılınca ilki duruyor; ilkinde devam edilince ikincisi duruyor, değerler karışmıyor",
+         second_window_takes_over),
     ]
 
 
@@ -2745,6 +3172,7 @@ def main():
             run.flow("Otomatik kaydetme ve devam eden antrenman", autosave_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Bitir ve İptal sürerken ekrandan çıkış", ending_while_leaving_steps(run),
                      init_script=FAIL_WRITES_LATER_SCRIPT)
+            run.flow("IndexedDB bağlantısı kapanınca", connection_steps(run), init_script=CONNECTION_SCRIPT)
             run.flow("Yedekleme", backup_steps(run), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Makine silme ve ilerleme sayacı", machines_and_counter_steps(run))
             run.flow("Dönüşümlü hareket önerisi", rotation_steps(run))
@@ -2758,6 +3186,9 @@ def main():
             run.flow("Hedef kopyası", target_copy_steps(run))
             run.flow("Aşama 1 verisinden yükseltme", upgrade_steps(run))
             run.flow("Aşama 2 verisinden yükseltme", phase2_upgrade_steps(run))
+            run.flow("Yükseltmede yazma hatası ve devam eden antrenman", upgrade_resilience_steps(run),
+                     init_script=FAIL_WRITES_ON_OPEN_SCRIPT)
+            run.flow("Aynı anda iki pencere", instance_steps(run))
             browser.close()
     finally:
         for running in (server, copy_server):

@@ -6,7 +6,10 @@ export function escapeHtml(value) {
 }
 
 export function errorReason(error) {
-  return error?.name === 'QuotaExceededError' ? 'Depolama alanı dolu.' : 'Tarayıcı veriyi yazamadı.';
+  if (error?.name === 'QuotaExceededError') return 'Depolama alanı dolu.';
+  // Bağlantı kapandı ve yeniden açılamadı (store.js, withDatabase).
+  if (error?.name === 'DatabaseUnavailable' || error?.name === 'InvalidStateError') return 'Tarayıcı veritabanına bağlanılamadı.';
+  return 'Tarayıcı veriyi yazamadı.';
 }
 
 // Ana gezinme: dört ana ekran. Diğer ekranlarda sekme yok, geri bağlantısı var.
