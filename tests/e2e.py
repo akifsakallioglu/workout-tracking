@@ -1615,6 +1615,36 @@ def history_steps(run):
         expect(history_rows(page)).to_have_count(1)
         assert [session["id"] for session in sessions(page)] == ["gecmis-yeni"], sessions(page)
 
+    def edit_shows_skipped_rows(page):
+        history_rows(page).first.click()
+        page.get_by_role("link", name="Düzenle").click()
+        # Antrenmana devam ediliyormuş gibi günün bütün satırları, programdaki sırayla.
+        expect(page.locator("[data-card] h2")).to_have_text([
+            "Machine Chest Press",
+            "Cable Fly",
+            "Seated Lateral Raise",
+            "Machine Shoulder Press",
+            "Rope Pushdown",
+            "Overhead Rope Extension",
+        ])
+        values = lambda inputs: inputs.evaluate_all("(elements) => elements.map((element) => element.value)")
+        assert values(reps_inputs(card(page, "Rope Pushdown"))) == ["12", "12", "10"]  # kayıttaki değerler
+        fly = card(page, "Cable Fly")
+        expect(fly.locator(".target")).to_have_text("Hedef 3 × 15")  # atlanan satırın hedefi programdan
+        add_machine(fly, "Kablo", "kg")
+        expect(weight_input(fly)).to_have_value("")
+        assert values(reps_inputs(fly)) == ["", "", ""]  # atlanan satır boş gelir
+        log_sets(fly, "20", ["15", "15"])
+        page.get_by_role("button", name="Kaydet", exact=True).click()
+        expect(page.locator("#flash")).to_have_text("Değişiklikler kaydedildi ✓")
+        expect(page.locator(".entry h2")).to_have_text(["Cable Fly · Kablo", "Rope Pushdown · Kablo"])
+        saved = next(session for session in sessions(page) if session["id"] == "gecmis-yeni")
+        assert len(saved["entries"]) == 2, saved["entries"]  # boş kalan satırlar yine atlandı
+        fly_entry = saved["entries"][0]
+        assert fly_entry["exerciseId"] == "cable-fly", fly_entry
+        assert fly_entry["target"] == {"sets": 3, "repMin": 12, "repMax": 15}, fly_entry["target"]
+        assert [(item["weight"], item["reps"]) for item in fly_entry["sets"]] == [(20, 15), (20, 15)], fly_entry["sets"]
+
     return [
         ("Geçmiş listesi en yeniden eskiye; hareket, set ve süre", list_newest_first),
         ("Ayrıntı: hareket, makine, setler ve hedef", detail),
@@ -1623,6 +1653,7 @@ def history_steps(run):
         ("Boş kayıt uyarısı; kaydetmeden çıkarken onay", validation_and_leave_guard),
         ("Düzenlerken makine değiştiriliyor", change_machine),
         ("Silmeden önce onay soruluyor", delete_with_confirmation),
+        ("Düzenlemede atlanan satırlar boş geliyor; doldurulan kayda giriyor, boş kalan atlanıyor", edit_shows_skipped_rows),
     ]
 
 
@@ -2258,16 +2289,20 @@ def machine_management_steps(run):
         history_rows(page).first.click()
         expect(page.get_by_role("heading", level=1)).to_contain_text("Pull · ")
         page.get_by_role("link", name="Düzenle").click()
+        # Pull'un satırları (o antrenmanda atlandı) boş kart olarak görünür; ekleme listesinde çıkmaz.
+        expect(card(page, "Cable Row")).to_be_visible()
         page.get_by_role("button", name="+ Hareket ekle").click()
-        extra_form(page).get_by_label("Hareket", exact=True).select_option(label="Cable Row")
+        choices = extra_form(page).get_by_label("Hareket", exact=True).locator("option").all_text_contents()
+        assert "Cable Row" not in choices, choices
+        extra_form(page).get_by_label("Hareket", exact=True).select_option(label="Leg Press")
         expect(extra_form(page).get_by_label("En çok tekrar", exact=True)).to_have_value("12")
         extra_form(page).get_by_role("button", name="Ekle").click()
-        row = card(page, "Cable Row")
-        add_machine(row, "Kablo", "kg")
+        row = card(page, "Leg Press")
+        add_machine(row, "Makine", "kg")
         log_sets(row, "35", ["12"])
         page.get_by_role("button", name="Kaydet", exact=True).click()
         expect(page.locator("#flash")).to_have_text("Değişiklikler kaydedildi ✓")
-        expect(page.locator(".entry h2")).to_have_text(["Hammer Curl · Dambıl", "Cable Row · Kablo"])
+        expect(page.locator(".entry h2")).to_have_text(["Hammer Curl · Dambıl", "Leg Press · Makine"])
         page.get_by_role("link", name="← Geçmiş").click()
         page.get_by_role("link", name="Ana Sayfa").click()
 

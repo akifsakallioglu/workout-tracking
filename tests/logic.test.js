@@ -15,6 +15,7 @@ import {
   dateBadge,
   dayNameError,
   defaultEquipmentId,
+  editLayout,
   equipmentError,
   equipmentUseCount,
   e1rm,
@@ -750,6 +751,42 @@ test('öneri metni', () => {
 });
 
 // ---------------------------------------------------------------- Geçmiş ve düzeltme
+
+test('geçmiş düzenleme: günün bütün satırları sırayla; yapılan kayıttaki hâliyle, atlanan boş, programda olmayan sonda', () => {
+  const row = (id, options, sets = 3, repMax = 12) => ({ id, options, sets, repMin: repMax, repMax });
+  const entry = (exerciseId, options = [exerciseId]) => ({
+    exerciseId, equipmentId: `${exerciseId}-makine`, options, target: { sets: 2, repMin: 15, repMax: 15 }, sets: [{ weight: 10, reps: 15 }],
+  });
+  const items = [row('a', ['cable-row']), row('b', ['face-pull']), row('c', WRIST, 2, 15)];
+  // Kayıtta: "+ Hareket ekle" ile eklenen Hammer Curl, Face Pull ve dönüşümlü satırdan Reverse Curl.
+  const done = { entries: [entry('hammer-curl'), entry('face-pull'), entry('reverse-curl', WRIST)] };
+  assertEqual(editLayout(done, items), [
+    { item: items[0] },
+    { entry: done.entries[1] },
+    { entry: done.entries[2] },
+    { entry: done.entries[0] },
+  ]);
+  assertEqual(editLayout(done, []), done.entries.map((only) => ({ entry: only })), 'gün programdan silindiyse yalnızca kayıtlar');
+  assertEqual(editLayout({ entries: [] }, items).map((part) => part.item.id), ['a', 'b', 'c'], 'kayıt yoksa bütün satırlar boş');
+});
+
+test('geçmiş düzenleme: seçili makine ve dönüşüm önerisi o antrenmandan önceki kayıtlara göre', () => {
+  const exercise = {
+    name: 'Standing Calf Raise',
+    equipment: [{ id: 'makine', name: 'Makine', unit: 'kg' }, { id: 'calf-2', name: 'Calf 2', unit: 'kg' }],
+  };
+  const calf = (id, date, equipmentId) => session({ id, date, dayId: 'legs', exerciseId: 'standing-calf-raise', equipmentId });
+  const sessions = [calf('a', '2026-09-08T12:00:00.000Z', 'calf-2'), calf('b', '2026-09-22T12:00:00.000Z', 'makine')];
+  assertEqual(defaultEquipmentId(sessions, 'legs', 'standing-calf-raise', exercise), 'makine', 'bugün: en son kullanılan');
+  assertEqual(
+    defaultEquipmentId(sessions, 'legs', 'standing-calf-raise', exercise, '2026-09-15T12:00:00.000Z'),
+    'calf-2',
+    '15 Eylül düzenlenirken sonraki antrenman sayılmaz',
+  );
+  const rotation = [pullSession('1', '2026-09-08T12:00:00.000Z', 'wrist-curl'), pullSession('2', '2026-09-22T12:00:00.000Z', 'reverse-curl')];
+  assertEqual(suggestOption(rotation, 'pull', WRIST).exerciseId, 'wrist-curl');
+  assertEqual(suggestOption(rotation, 'pull', WRIST, '2026-09-15T12:00:00.000Z').exerciseId, 'reverse-curl');
+});
 
 test('geçmiş: bitmiş antrenmanlar en yeniden eskiye; süre, gün ve özet biçimi', () => {
   const sessions = [

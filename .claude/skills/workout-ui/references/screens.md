@@ -29,7 +29,7 @@ Sınıflar ve kimlikler `tests/e2e.py`'de seçici olarak kullanılır. Birini de
 - **Makine listesi** ("Düzenle"): her öğede ad ve birim, sağda "Değiştir" (küçük) ve "Sil" (küçük tehlikeli); "Silinmiş makineler" altında kesik çizgili öğeler ve "Geri al"; en altta "Bitti".
 - **Kartların altı:** "+ Hareket ekle" (`.button.add`, tam genişlik) ya da açıkken ekleme formu (kart); en sonda `--space-6` boşlukla "Antrenmanı iptal et" (tehlikeli, tam genişlik). Düzenleme modunda iptal düğmesi yoktur.
 - Sekme çubuğu gösterilmez.
-- **Düzenleme modu** (`#/gecmis/<kimlik>/duzenle`): aynı kartlar; üst çubukta "← Vazgeç", "Push · 29 Eyl Sal", "Kaydet".
+- **Düzenleme modu** (`#/gecmis/<kimlik>/duzenle`): aynı kartlar; üst çubukta "← Vazgeç", "Push · 29 Eyl Sal", "Kaydet". Günün bütün satırları programdaki sırayla görünür: yapılan hareketler dolu, o antrenmanda atlananlar boş kart (canlı antrenmandaki gibi; ayrı bir etiket ya da renk yok). Hangi kartın geldiği veri kuralıdır (CLAUDE.md, `editLayout`).
 - **Çakışma ekranı** (başka günün antrenmanı devam ederken): geri bağlantısı; kartta küçük üst başlık, h1 "… antrenmanı bitmedi" ve açıklama; düğmeler alt alta ve tam genişlikte: "Devam et" (ana), "Bitir ve … başla" (ikincil), `--space-6` boşluk, en sonda "Sil ve … başla" (tehlikeli).
 
 ## Geçmiş (`js/views/history.js`)

@@ -351,6 +351,13 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - Yan sekme sürüklerken görünmez: her ekran açılınca verisini okuyup çizildiğinden iki ekranı aynı anda hazır tutmak büyük bir yapı değişikliği olurdu.
 - *Bitti sayılır:* uçtan uca testte gerçek dokunma hareketiyle içerik ve çizgi parmağı izliyor, az sürükleyince yerine dönüyor, uçta esniyor; yatay harekette sayfa dikey kaymıyor, dikey harekette kayıyor; dokununca çizgi kayıyor; "hareketi azalt"ta içerik sürüklenmiyor.
 
+**Aşama 14: Geçmiş düzenlemede atlanan satırlar** (kullanıcının isteği)
+- Sorun: yanlışlıkla bitirilen antrenman sonradan tamamlanamıyordu; düzenleme yalnızca yapılan hareketleri gösteriyordu, çünkü seti girilmemiş hareket kayda yazılmaz.
+- Düzenlemede antrenmana devam ediliyormuş gibi günün bugünkü programındaki bütün satırlar sırayla gelir: yapılan hareket kayıttaki hâliyle (hedefi, makinesi, setleri), o antrenmanda atlanan satır boş. Atlanan satırın hedefi programdandır (kayda yazılmamıştı). Doldurulan kayda girer, boş kalan yine atlanır.
+- Satırı programda olmayan kayıtlar (sonradan silinmiş satır, "+ Hareket ekle" ile eklenen) sonda durur; gün programdan silindiyse yalnızca kayıtlar görünür.
+- Boş kartta seçili gelen makine ve dönüşümlü satırın önerisi, "Geçen sefer" gibi o antrenmandan önceki kayıtlara göredir; sonraki antrenmanlar etkilemez.
+- *Bitti sayılır:* birim testinde sıra ve kaynak (`editLayout`), önceki kayıtlara göre makine ve öneri; uçtan uca testte atlanan satırlar boş ve programdaki sırayla görünüyor, doldurulan satır programdaki hedefiyle kayda giriyor, boş kalanlar kayda girmiyor; aynı günün satırı "+ Hareket ekle" listesinde çıkmıyor.
+
 ## 9. İlk geliştirme görevi: Aşama 1
 Aşama 0 bittikten sonra başlar. Doğrulandıktan sonra durulur ve sonuç size bildirilir.
 

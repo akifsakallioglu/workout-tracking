@@ -98,12 +98,14 @@ export function lastPerformance(sessions, { dayId, exerciseId, equipmentId }, be
 }
 
 // O gün bu harekette en son kullanılan makine; yoksa (ya da o makine artık listede değilse)
-// listedeki ilk makine. Hareketin hiç makinesi yoksa null.
-export function defaultEquipmentId(sessions, dayId, exerciseId, exercise) {
+// listedeki ilk makine. Hareketin hiç makinesi yoksa null. before verilirse (geçmiş bir antrenman
+// düzenlenirken) yalnızca o andan önce başlayan antrenmanlara bakılır.
+export function defaultEquipmentId(sessions, dayId, exerciseId, exercise, before = null) {
   const available = exercise.equipment.filter((equipment) => !equipment.archived);
   let latest = null;
   for (const session of sessions) {
     if (!session.finishedAt || session.dayId !== dayId) continue;
+    if (before && session.startedAt >= before) continue;
     const entry = session.entries.find((candidate) => candidate.exerciseId === exerciseId && candidate.sets.length > 0);
     if (entry && (!latest || session.startedAt > latest.date)) {
       latest = { date: session.startedAt, equipmentId: entry.equipmentId };
@@ -140,11 +142,13 @@ export function lastDoneDate(sessions, dayId) {
 // Dönüşümlü satırda öneri: aynı günün bitmiş antrenmanlarında bu satırın hareketlerinden en son
 // yapılanın (seti girilmiş) bir sonrakisi; liste bitince başa döner, hiç kayıt yoksa ilk hareket.
 // Atlanan hareket "yapıldı" sayılmadığı için sırayı ilerletmez; öneri elle değiştirildiyse gerçekte
-// yapılan hareket esas alınır. Sonuç: { exerciseId, last: { exerciseId, date } | null }
-export function suggestOption(sessions, dayId, options) {
+// yapılan hareket esas alınır. before verilirse (geçmiş bir antrenman düzenlenirken) yalnızca o andan
+// önce başlayan antrenmanlara bakılır. Sonuç: { exerciseId, last: { exerciseId, date } | null }
+export function suggestOption(sessions, dayId, options, before = null) {
   let last = null;
   for (const session of sessions) {
     if (!session.finishedAt || session.dayId !== dayId) continue;
+    if (before && session.startedAt >= before) continue;
     const entry = session.entries.find((candidate) => options.includes(candidate.exerciseId) && candidate.sets.length > 0);
     if (entry && (!last || session.startedAt > last.date)) last = { exerciseId: entry.exerciseId, date: session.startedAt };
   }
@@ -178,6 +182,25 @@ export function buildEntry({ item, exerciseId, exercise, equipment, sets }) {
     target: { sets: item.sets, repMin: item.repMin, repMax: item.repMax },
     sets,
   };
+}
+
+// Geçmiş bir antrenman düzenlenirken kartların sırası ve kaynağı. Günün bugünkü programındaki
+// satırlar sırayla gelir: hareketi kayıtta olan satır kayıttaki girişle ({ entry }: hedefi, makinesi ve
+// setleri kayıttaki hâliyle), o antrenmanda atlanmış satır boş ({ item }: hedefi programdan, çünkü
+// atlanan satır kayda yazılmaz). Satırı programda olmayan girişler (sonradan silinmiş satır ya da
+// "+ Hareket ekle") sonda, kayıttaki sırayla. Gün programdan silindiyse items boştur: yalnızca girişler.
+export function editLayout(session, items) {
+  const used = new Set();
+  const layout = items.map((item) => {
+    const index = session.entries.findIndex((entry, at) => !used.has(at) && item.options.includes(entry.exerciseId));
+    if (index === -1) return { item };
+    used.add(index);
+    return { entry: session.entries[index] };
+  });
+  session.entries.forEach((entry, at) => {
+    if (!used.has(at)) layout.push({ entry });
+  });
+  return layout;
 }
 
 export function buildSession({ id, startedAt, finishedAt, day, entries }) {

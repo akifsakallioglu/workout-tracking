@@ -2,13 +2,16 @@
 // "devam ediyor" olarak kaydedilir ve her değişiklik kendiliğinden kaydedilir; "Bitir" antrenmanı
 // bitirir, "İptal" siler. Seti girilmeyen hareket atlanır ve kayda yazılmaz.
 // Düzenleme modu (editSessionId): geçmiş bir antrenman aynı kartlarla düzeltilir; otomatik kaydetme
-// yoktur, "Kaydet" ile kaydedilir. "Geçen sefer" ve sayaç o antrenmandan önceki kayıtlara göredir.
+// yoktur, "Kaydet" ile kaydedilir. O antrenmanda atlanan satırlar da boş kart olarak görünür ve
+// doldurulabilir. "Geçen sefer", sayaç, seçili makine ve dönüşüm önerisi o antrenmandan önceki
+// kayıtlara göredir.
 // "+ Hareket ekle" programı değiştirmeden yalnızca bu antrenmana hareket ekler.
 import {
   activeSession,
   buildSession,
   changedEquipment,
   defaultEquipmentId,
+  editLayout,
   equipmentError,
   equipmentUseCount,
   evaluateCards,
@@ -122,15 +125,18 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
   }
   const active = editing ? null : activeSession(sessions);
   if (active && active.dayId !== day.id) return renderConflict(container, { active, day, program, navigate });
+  // Geçmiş bir antrenman düzenlenirken "geçen sefer", sayaç, seçili makine ve dönüşüm önerisi o
+  // antrenmandan önceki kayıtlara göredir.
+  const before = editing?.startedAt ?? null;
 
   // exercises: antrenman sırasında yeni hareket eklendiyse güncel katalog.
   const newCard = (item, exercises = program.exercises) => {
     // Dönüşümlü satırda önerilen hareket seçili gelir; tek hareketli satırda o hareket.
-    const { exerciseId } = suggestOption(sessions, day.id, item.options);
+    const { exerciseId } = suggestOption(sessions, day.id, item.options, before);
     return {
       item,
       exerciseId,
-      equipmentId: defaultEquipmentId(sessions, day.id, exerciseId, exercises[exerciseId]),
+      equipmentId: defaultEquipmentId(sessions, day.id, exerciseId, exercises[exerciseId], before),
       weight: '',
       reps: Array.from({ length: item.sets }, () => ''),
       problems: [],
@@ -167,8 +173,13 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
   });
 
   let cards;
-  if (editing) cards = editing.entries.map(cardFromEntry);
-  else if (active?.draft) cards = active.draft.cards.map(cardFromDraft);
+  if (editing) {
+    // Antrenmana devam ediliyormuş gibi günün bütün satırları: yapılan hareketler kayıttaki hâliyle, o
+    // antrenmanda atlanan satırlar boş (doldurulan kayda girer, boş kalan yine atlanır). Satırı programda
+    // olmayan kayıtlar sonda (editLayout).
+    const items = program.days.find((candidate) => candidate.id === editing.dayId)?.items ?? [];
+    cards = editLayout(editing, items).map(({ entry, item }) => (entry ? cardFromEntry(entry) : newCard(item)));
+  } else if (active?.draft) cards = active.draft.cards.map(cardFromDraft);
   else cards = day.items.map((item) => newCard(item));
 
   const state = {
@@ -197,7 +208,6 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     exerciseOf(card).equipment.find(
       (equipment) => equipment.id === card.equipmentId && (!equipment.archived || equipment.id === card.keepEquipmentId),
     );
-  const before = editing?.startedAt ?? null;
   const cardContext = () => ({
     day,
     program: state.program,
@@ -556,7 +566,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       // Silinen makine seçili olan kartlarda başka bir makine (ya da hiçbiri) seçilir.
       for (const other of state.cards) {
         if (other.exerciseId === card.exerciseId && other.equipmentId === equipmentId) {
-          other.equipmentId = defaultEquipmentId(state.sessions, day.id, other.exerciseId, exerciseOf(other));
+          other.equipmentId = defaultEquipmentId(state.sessions, day.id, other.exerciseId, exerciseOf(other), before);
         }
       }
       if (!exerciseOf(card).equipment.some((option) => !option.archived)) card.editingMachines = false;
@@ -810,7 +820,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       requestSave(true);
     } else if (target.name === `option-${index}`) {
       card.exerciseId = target.value;
-      card.equipmentId = defaultEquipmentId(state.sessions, day.id, card.exerciseId, exerciseOf(card));
+      card.equipmentId = defaultEquipmentId(state.sessions, day.id, card.exerciseId, exerciseOf(card), before);
       card.machineForm = null;
       clearProblems(card);
       renderCard(index);
