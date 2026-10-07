@@ -216,13 +216,76 @@ export function activeSession(sessions) {
   return latest;
 }
 
+// Kutularda girilmiş bir değer var mı (ağırlık ya da en az bir tekrar).
+export function hasEnteredValues({ weight, reps }) {
+  return Boolean(weight.trim() || reps.some((value) => value.trim()));
+}
+
+// Antrenman sırasında makine (dönüşümlü satırda hareket) değişince girilen değerler eski makinede
+// kalır, yeni makinenin değerleri gelir: o makineye bu antrenmanda hiç girilmediyse kutular boştur
+// (hedefteki set sayısı kadar). others, kartın seçili olmayan makinelerindeki değerlerdir
+// ({ exerciseId, equipmentId, weight, reps }); boş değer saklanmaz. Sonuç, kartın yeni alanlarıdır.
+export function switchedValues(card, exerciseId, equipmentId) {
+  const isTarget = (values) => values.exerciseId === exerciseId && values.equipmentId === equipmentId;
+  const restored = card.others.find(isTarget);
+  const others = card.others.filter((values) => !isTarget(values));
+  if (card.equipmentId && hasEnteredValues(card)) {
+    others.push({ exerciseId: card.exerciseId, equipmentId: card.equipmentId, weight: card.weight, reps: [...card.reps] });
+  }
+  return {
+    exerciseId,
+    equipmentId,
+    weight: restored?.weight ?? '',
+    reps: restored ? [...restored.reps] : Array.from({ length: card.item.sets }, () => ''),
+    others,
+  };
+}
+
+// Kartın seçili olmayan makinelerinde girilmiş değerler: satırdaki hareketlerin seçilebilen
+// makinelerindekiler. Silinmiş makinenin değerleri makineyle gider ve sayılmaz; kartta "(silinmiş)"
+// olarak seçilebilen makine (keepEquipmentId) sayılır.
+export function otherValues(card, exercises) {
+  return (card.others ?? []).filter((values) => {
+    const equipment = exercises[values.exerciseId]?.equipment.find((option) => option.id === values.equipmentId);
+    return (
+      card.item.options.includes(values.exerciseId) &&
+      Boolean(equipment) &&
+      (!equipment.archived || equipment.id === card.keepEquipmentId) &&
+      hasEnteredValues(values)
+    );
+  });
+}
+
+// Seçili olmayan makinelerde değer kalmışsa kart bitirilmez: bir harekette yalnızca seçili makine
+// kaydedilir ve öbür makinedeki değerler sessizce kaybolmasın.
+// pending: otherValues'un sonucu (makineleri katalogda vardır).
+function otherValuesMessage(pending, card, exercises) {
+  const names = pending.map(({ exerciseId, equipmentId }) => {
+    const exercise = exercises[exerciseId];
+    const machine = exercise.equipment.find((option) => option.id === equipmentId).name;
+    return exerciseId === card.exerciseId ? machine : `${exercise.name} · ${machine}`;
+  }).join(', ');
+  const several = pending.length > 1;
+  const choose = `Bir harekette yalnızca seçili makine kaydedilir; kaydedeceğiniz makineyi seçin, ${several ? 'öbürlerindeki' : 'öbüründeki'} değerleri silin.`;
+  if (hasEnteredValues(card)) return `Seçili olmayan ${several ? 'makinelerde' : 'makinede'} de değer var: ${names}. ${choose}`;
+  return several
+    ? `Değerler seçili olmayan makinelerde: ${names}. ${choose}`
+    : `Değerler seçili olmayan makinede: ${names}. Kaydetmek için onu seçin; kaydetmeyecekseniz değerlerini silin.`;
+}
+
 // Kartlardaki değerleri denetler ve sorunsuz kartlardan kayıt girişleri üretir. Makinesi olmayan
-// ya da boş kart atlanır. Kart: { item, exerciseId, equipmentId, weight, reps, keepEquipmentId? };
-// keepEquipmentId, geçmiş bir kayıt düzenlenirken sonradan silinmiş (arşivlenmiş) makinesidir.
+// ya da boş kart atlanır. Kart: { item, exerciseId, equipmentId, weight, reps, keepEquipmentId?, others? };
+// keepEquipmentId, geçmiş bir kayıt düzenlenirken sonradan silinmiş (arşivlenmiş) makinesidir; others,
+// devam eden antrenmanda seçili olmayan makinelerin değerleridir (switchedValues).
 export function evaluateCards(cards, exercises) {
   const entries = [];
   let hasProblems = false;
   const results = cards.map((card) => {
+    const pending = otherValues(card, exercises);
+    if (pending.length) {
+      hasProblems = true;
+      return { problems: [{ field: 'machine', kind: 'other-values' }], message: otherValuesMessage(pending, card, exercises) };
+    }
     const exercise = exercises[card.exerciseId];
     const equipment = exercise?.equipment.find(
       (option) => option.id === card.equipmentId && (!option.archived || option.id === card.keepEquipmentId),
@@ -241,12 +304,15 @@ export function usedEquipmentIds(sessions) {
   return new Set(sessions.flatMap((session) => session.entries.map((entry) => entry.equipmentId)));
 }
 
-// Program yükseltmesinde korunacak makineler: kayıtlarda kullanılanlar ve devam eden antrenmanın
-// taslağında seçili olanlar (antrenman bitince kayda girecek).
+// Program yükseltmesinde korunacak makineler: kayıtlarda kullanılanlar, devam eden antrenmanın
+// taslağında seçili olanlar (antrenman bitince kayda girecek) ve taslakta değer girilmiş öbür makineler.
 export function equipmentInUse(sessions) {
   const used = usedEquipmentIds(sessions);
   for (const session of sessions) {
-    for (const card of session.draft?.cards ?? []) if (card.equipmentId) used.add(card.equipmentId);
+    for (const card of session.draft?.cards ?? []) {
+      if (card.equipmentId) used.add(card.equipmentId);
+      for (const values of card.others ?? []) used.add(values.equipmentId);
+    }
   }
   return used;
 }
@@ -556,7 +622,10 @@ function backupError(data) {
   // Taslak kartı programdaki hareketlere bağlıdır: antrenman ekranı onları katalogdan okur. Bitmiş
   // kayıtların hareketleri katalogda aranmaz; kayıt, adını kendisi taşır.
   const inCatalog = (exerciseId) => Object.hasOwn(program.exercises, exerciseId);
-  const validCard = (card) => card.item.options.includes(card.exerciseId) && card.item.options.every(inCatalog);
+  const validCard = (card) =>
+    card.item.options.includes(card.exerciseId) &&
+    card.item.options.every(inCatalog) &&
+    (card.others ?? []).every((values) => card.item.options.includes(values.exerciseId));
   let unfinished = 0;
   for (const [index, session] of sessions.entries()) {
     if (!isSession(session) || ids.has(session.id)) return corrupt(`${index + 1}. antrenman okunamadı`);
@@ -593,14 +662,20 @@ const isEntry = (entry) =>
   Array.isArray(entry.sets) &&
   entry.sets.length > 0 && // seti girilmemiş hareket kayda yazılmaz
   entry.sets.every(isSet);
+const isEnteredValues = (values) =>
+  isObject(values) &&
+  typeof values.weight === 'string' &&
+  Array.isArray(values.reps) &&
+  values.reps.every((value) => typeof value === 'string');
 const isDraftCard = (card) =>
-  isObject(card) &&
+  isEnteredValues(card) &&
   isItem(card.item) &&
   isText(card.exerciseId) &&
   (card.equipmentId === null || isText(card.equipmentId)) &&
-  typeof card.weight === 'string' &&
-  Array.isArray(card.reps) &&
-  card.reps.every((value) => typeof value === 'string');
+  // Seçili olmayan makinelerin değerleri (switchedValues); eski taslaklarda yoktur.
+  (card.others === undefined ||
+    (Array.isArray(card.others) &&
+      card.others.every((values) => isEnteredValues(values) && isText(values.exerciseId) && isText(values.equipmentId))));
 const isSession = (session) =>
   isObject(session) &&
   isText(session.id) &&

@@ -2326,6 +2326,115 @@ def machine_management_steps(run):
     ]
 
 
+# ---------------------------------------------------------------- Makineye göre değerler
+
+def entered(scope):
+    """Kartın kutularındaki değerler: (ağırlık, [tekrarlar]); ağırlıksızda ağırlık None."""
+    weight = weight_input(scope)
+    return (
+        weight.input_value() if weight.count() else None,
+        reps_inputs(scope).evaluate_all("(inputs) => inputs.map((input) => input.value)"),
+    )
+
+
+def machine_values_steps(run):
+    def values_stay_with_machine(page):
+        page.goto(run.base_url + "/")
+        open_day(page, "push", "Push")
+        rope = card(page, "Rope Pushdown")
+        add_machine(rope, "Kablo", "kg")
+        log_sets(rope, "40", ["12", "11"])
+        add_machine(rope, "Kablo 2", "kg")  # yeni makine boş başlar
+        assert entered(rope) == ("", ["", "", ""]), entered(rope)
+        log_sets(rope, "30", ["10"])
+        radio(rope, "Kablo · kg").check()
+        assert entered(rope) == ("40", ["12", "11", ""]), entered(rope)
+        radio(rope, "Kablo 2 · kg").check()
+        assert entered(rope) == ("30", ["10", "", ""]), entered(rope)
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+
+    def values_survive_reload(page):
+        page.reload()
+        expect(page.locator(".topbar h1")).to_have_text("Push")
+        rope = card(page, "Rope Pushdown")
+        expect(radio(rope, "Kablo 2 · kg")).to_be_checked()
+        assert entered(rope) == ("30", ["10", "", ""]), entered(rope)
+        radio(rope, "Kablo · kg").check()
+        assert entered(rope) == ("40", ["12", "11", ""]), entered(rope)
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        draft = next(c for c in unfinished(page)[0]["draft"]["cards"] if c["exerciseId"] == "rope-pushdown")
+        assert (draft["weight"], draft["reps"]) == ("40", ["12", "11", ""]), draft
+        assert [(other["weight"], other["reps"]) for other in draft["others"]] == [("30", ["10", "", ""])], draft
+
+    def finish_needs_single_machine(page):
+        rope = card(page, "Rope Pushdown")
+        finish(page)
+        expect(card_message(rope)).to_have_text(
+            "Seçili olmayan makinede de değer var: Kablo 2. Bir harekette yalnızca seçili makine kaydedilir; "
+            "kaydedeceğiniz makineyi seçin, öbüründeki değerleri silin.")
+        expect(workout_message(page)).to_have_text("Bazı hareketlerde düzeltilmesi gereken değerler var.")
+        expect(radio(rope, "Kablo · kg")).to_be_focused()
+        assert not any(session["finishedAt"] for session in sessions(page)), "Öbür makinede değer varken bitmemeliydi"
+        page.screenshot(path=str(ARTIFACTS / "asama15-obur-makine.png"), full_page=True)
+        # Başka günden "Bitir ve … başla" da bitirmez.
+        go_home(page)
+        page.locator(".days a[href='#/antrenman/pull']").click()
+        page.get_by_role("button", name="Bitir ve Pull antrenmanına başla").click()
+        expect(page.locator("#conflict-message")).to_have_text(
+            "Push antrenmanında eksik ya da hatalı değerler var. Düzeltmek için antrenmana devam edin.")
+        page.get_by_role("link", name="Devam et").click()
+        expect(page.locator(".topbar h1")).to_have_text("Push")
+        # Öbür makinedeki değerler silinince seçili makine kaydedilir.
+        rope = card(page, "Rope Pushdown")
+        radio(rope, "Kablo 2 · kg").check()
+        log_sets(rope, "", [""])
+        radio(rope, "Kablo · kg").check()
+        assert entered(rope) == ("40", ["12", "11", ""]), entered(rope)
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        [entry] = sessions(page)[0]["entries"]
+        assert (entry["equipmentName"], entry["sets"]) == ("Kablo", [{"weight": 40, "reps": 12}, {"weight": 40, "reps": 11}]), entry
+
+    def rotation_and_deleted_machine(page):
+        open_day(page, "pull", "Pull")
+        wrist = card(page, "Wrist Curl / Reverse Curl")
+        expect(radio(wrist, "Wrist Curl")).to_be_checked()
+        add_machine(wrist, "Dambıl", "kg")
+        log_sets(wrist, "10", ["15"])
+        radio(wrist, "Reverse Curl").check()
+        expect(wrist.locator(".no-machine")).to_have_count(1)
+        add_machine(wrist, "Bar", "kg")
+        assert entered(wrist) == ("", ["", ""]), entered(wrist)
+        log_sets(wrist, "20", ["12"])
+        radio(wrist, "Wrist Curl").check()
+        expect(radio(wrist, "Dambıl · kg")).to_be_checked()
+        assert entered(wrist) == ("10", ["15", ""]), entered(wrist)
+        radio(wrist, "Reverse Curl").check()
+        expect(radio(wrist, "Bar · kg")).to_be_checked()
+        assert entered(wrist) == ("20", ["12", ""]), entered(wrist)
+        # Silinen makineye bu antrenmanda girilen değerler de silinir; onayda söylenir.
+        wrist.get_by_role("button", name="Düzenle").click()
+        messages = delete_machine(page, wrist, "Bar", accept=True)
+        assert messages == ['"Bar" makinesi silinsin mi? Bu antrenmanda bu makineye girdiğiniz değerler de silinir.'], messages
+        expect(save_status(page)).to_have_text("Makine silindi ✓")
+        expect(wrist.locator(".no-machine")).to_have_count(1)
+        radio(wrist, "Wrist Curl").check()
+        assert entered(wrist) == ("10", ["15", ""]), entered(wrist)
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Pull antrenmanı kaydedildi ✓")
+        pull = next(session for session in sessions(page) if session["dayId"] == "pull")
+        assert [(e["name"], e["equipmentName"], e["sets"]) for e in pull["entries"]] == [
+            ("Wrist Curl", "Dambıl", [{"weight": 10, "reps": 15}])], pull["entries"]
+
+    return [
+        ("Makine değişince değerler eski makinede kalıyor; yeni makine boş, geri dönünce değerler geliyor", values_stay_with_machine),
+        ("Her makinenin değerleri sayfa yenilenince de duruyor (taslakta)", values_survive_reload),
+        ("Öbür makinede değer varken 'Bitir' ve 'Bitir ve … başla' bitirmiyor; silinince seçili makine kaydediliyor",
+         finish_needs_single_machine),
+        ("Dönüşümlü satırda değerler hareketiyle kalıyor; silinen makinenin değerleri onunla gidiyor", rotation_and_deleted_machine),
+    ]
+
+
 # ---------------------------------------------------------------- İnternetsiz çalışma ve güncelleme
 
 WAIT_FOR_CONTROLLER = "navigator.serviceWorker.controller !== null"
@@ -3281,6 +3390,7 @@ def main():
             run.flow("İlerleme grafikleri", progress_steps(run))
             run.flow("Program düzenleyici", program_editor_steps(run))
             run.flow("Makine yönetimi ve hareket ekleme", machine_management_steps(run))
+            run.flow("Makineye göre değerler", machine_values_steps(run))
             run.flow("İnternetsiz çalışma", offline_steps(run))
             run.flow("Yeni sürüm ve güncelleme", update_steps(copy_url, app_copy), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))

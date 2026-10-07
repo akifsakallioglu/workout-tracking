@@ -19,13 +19,16 @@ import {
   formatDateTime,
   formatDay,
   formatWeight,
+  hasEnteredValues,
   itemTitle,
   lastPerformance,
+  otherValues,
   parseTarget,
   programTarget,
   restoreError,
   restoredEquipment,
   suggestOption,
+  switchedValues,
   usedEquipmentIds,
   withEquipment,
   withExercise,
@@ -139,6 +142,9 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       equipmentId: defaultEquipmentId(sessions, day.id, exerciseId, exercises[exerciseId], before),
       weight: '',
       reps: Array.from({ length: item.sets }, () => ''),
+      // Antrenman sırasında seçili olmayan makinelerdeki değerler (switchedValues): her makinenin
+      // değerleri ayrıdır; makineye dönünce geri gelir. Geçmiş düzenlemede kullanılmaz.
+      others: [],
       problems: [],
       message: '',
       machineForm: null, // { name, unit, error }: açıkken yeni makine formu görünür
@@ -152,15 +158,21 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
   const cardFromDraft = (draft) => {
     const exercise = program.exercises[draft.exerciseId];
     const selected = exercise.equipment.find((equipment) => equipment.id === draft.equipmentId);
-    return {
+    const card = {
       ...newCard(draft.item),
       exerciseId: draft.exerciseId,
       equipmentId: selected ? draft.equipmentId : defaultEquipmentId(sessions, day.id, draft.exerciseId, exercise),
       ...(selected?.archived ? { keepEquipmentId: selected.id } : {}),
       weight: draft.weight,
       reps: [...draft.reps],
+      others: draft.others ?? [],
       extra: Boolean(draft.extra),
     };
+    // Öbür makinelerin değerleri: silinmiş makinenin ya da satırda olmayan hareketin değerleri alınmaz
+    // (kullanıcı onları görüp silemezdi); seçili makineninkiler kutulardadır.
+    card.others = otherValues(card, program.exercises).filter((values) =>
+      values.exerciseId !== card.exerciseId || values.equipmentId !== card.equipmentId);
+    return card;
   };
   // Geçmiş bir kaydın girişinden kart: hedef kayıttaki kopyadır; makine sonradan silindiyse korunur.
   const cardFromEntry = (entry) => ({
@@ -216,7 +228,9 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     before,
     editing: Boolean(editing),
   });
-  const hasValues = () => state.cards.some((card) => card.weight.trim() || card.reps.some((value) => value.trim()));
+  // Kartta (seçili ya da öbür makinelerinde) girilmiş değer var mı.
+  const cardHasValues = (card) => hasEnteredValues(card) || card.others.some(hasEnteredValues);
+  const hasValues = () => state.cards.some(cardHasValues);
 
   function render() {
     const disabled = state.busy ? ' disabled' : '';
@@ -378,12 +392,13 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     return {
       ...buildSession({ id: state.sessionId, startedAt: state.startedAt, finishedAt: null, day, entries: [] }),
       draft: {
-        cards: state.cards.map(({ item, exerciseId, equipmentId, weight, reps, extra }) => ({
+        cards: state.cards.map(({ item, exerciseId, equipmentId, weight, reps, others, extra }) => ({
           item,
           exerciseId,
           equipmentId,
           weight,
           reps: [...reps],
+          ...(others.length ? { others: others.map((values) => ({ ...values, reps: [...values.reps] })) } : {}),
           ...(extra ? { extra: true } : {}),
         })),
       },
@@ -409,7 +424,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     else state.message = '';
     if (state.message) {
       render();
-      container.querySelector('[aria-invalid="true"]')?.focus();
+      focusProblem();
       saveNow(); // bitirilemeyen antrenmanın son hâli taslak olarak kalsın
       return;
     }
@@ -438,6 +453,15 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       state.busy = false;
       render();
     }
+  }
+
+  // Bitirilemeyince sorunlu yere odaklanılır: hatalı kutu ya da (öbür makinede değer kaldıysa) kartın
+  // seçili makinesi; makine seçili değilse seçili hareketi.
+  function focusProblem() {
+    const card = container.querySelector('.card-message:not(:empty)')?.closest('[data-card]');
+    const target = container.querySelector('[aria-invalid="true"]') ??
+      card?.querySelector('.machines input:checked') ?? card?.querySelector('input:checked');
+    target?.focus();
   }
 
   // Düzenleme modu: değerler denetlenir, antrenmanın girişleri yenileriyle değiştirilir. Tarih ve gün
@@ -513,18 +537,22 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
       return;
     }
 
+    const { exerciseId } = card;
     const equipment = { id: `eq-${createId()}`, name: form.name.trim(), unit: form.unit };
-    const next = withEquipment(state.program, card.exerciseId, equipment);
+    const next = withEquipment(state.program, exerciseId, equipment);
     state.writeContext = 'machine';
     state.busy = true;
     renderCard(index);
     try {
       await saveProgram(next);
       state.program = next;
-      card.equipmentId = equipment.id;
+      // Antrenman sırasında yeni makine boş başlar, girilen değerler önceki makinede kalır. Geçmiş
+      // düzenlemede yeni makine yanlış seçilmiş makinenin düzeltmesidir: değerler ona taşınır.
+      if (state.editing) Object.assign(card, { exerciseId, equipmentId: equipment.id });
+      else Object.assign(card, switchedValues(card, exerciseId, equipment.id));
       // Aynı hareketi kullanan ve henüz makinesi olmayan kartlarda da yeni makine seçili gelsin.
       for (const other of state.cards) {
-        if (other.exerciseId === card.exerciseId && !equipmentOf(other)) other.equipmentId = equipment.id;
+        if (other.exerciseId === exerciseId && !equipmentOf(other)) other.equipmentId = equipment.id;
       }
       card.machineForm = null;
       card.problems = [];
@@ -546,27 +574,37 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
   // listeden kalkar, eski kayıtlar bozulmaz.
   async function deleteMachine(index, equipmentId, confirmed = false) {
     const card = state.cards[index];
+    const { exerciseId } = card;
     const equipment = exerciseOf(card).equipment.find((option) => option.id === equipmentId);
     if (state.busy || !equipment) return;
+    // Kartın seçili makinesi ya da öbür makinelerindeki değerler bu makinenin mi.
+    const onMachine = (values) => values.exerciseId === exerciseId && values.equipmentId === equipmentId;
     if (!confirmed) {
       const uses = equipmentUseCount(state.sessions, equipmentId);
-      const question = uses
+      // Antrenman sırasında bu makineye girilen değerler makineyle birlikte silinir.
+      const typed = !state.editing && state.cards.some((other) =>
+        [other, ...other.others].some((values) => onMachine(values) && hasEnteredValues(values)));
+      const question = (uses
         ? `"${equipment.name}" makinesi silinsin mi? Bu makinede ${uses} kayıtlı antrenman var; o kayıtlar silinmez.`
-        : `"${equipment.name}" makinesi silinsin mi?`;
+        : `"${equipment.name}" makinesi silinsin mi?`) + (typed ? ' Bu antrenmanda bu makineye girdiğiniz değerler de silinir.' : '');
       if (!confirm(question)) return;
     }
 
-    const next = withoutEquipment(state.program, card.exerciseId, equipmentId, usedEquipmentIds(state.sessions));
+    const next = withoutEquipment(state.program, exerciseId, equipmentId, usedEquipmentIds(state.sessions));
     state.writeContext = 'machineDelete';
     state.busy = true;
     renderCard(index);
     try {
       await saveProgram(next);
       state.program = next;
-      // Silinen makine seçili olan kartlarda başka bir makine (ya da hiçbiri) seçilir.
+      // Silinen makine seçili olan kartlarda başka bir makine (ya da hiçbiri) seçilir. Antrenman sırasında
+      // silinen makinenin değerleri onunla gider; yeni seçilen makinenin değerleri gelir.
       for (const other of state.cards) {
-        if (other.exerciseId === card.exerciseId && other.equipmentId === equipmentId) {
-          other.equipmentId = defaultEquipmentId(state.sessions, day.id, other.exerciseId, exerciseOf(other), before);
+        other.others = other.others.filter((values) => !onMachine(values));
+        if (onMachine(other)) {
+          const replacement = defaultEquipmentId(state.sessions, day.id, exerciseId, exerciseOf(other), before);
+          if (state.editing) other.equipmentId = replacement;
+          else Object.assign(other, switchedValues({ ...other, equipmentId: null }, exerciseId, replacement));
         }
       }
       if (!exerciseOf(card).equipment.some((option) => !option.archived)) card.editingMachines = false;
@@ -711,7 +749,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
   // Sonradan eklenen kart kaldırılır; değer girildiyse önce sorulur.
   function removeCard(index) {
     const card = state.cards[index];
-    const hasCardValues = card.weight.trim() || card.reps.some((value) => value.trim());
+    const hasCardValues = cardHasValues(card);
     const title = itemTitle(card.item, state.program.exercises);
     if (hasCardValues && !confirm(`${title} bu antrenmandan kaldırılsın mı? Girdiğiniz değerler silinir.`)) return;
     state.cards.splice(index, 1);
@@ -814,13 +852,25 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     } else if (target.name === `edit-unit-${index}` && card.machineEdit) {
       card.machineEdit.unit = target.value;
     } else if (target.name === `equipment-${index}`) {
-      card.equipmentId = target.value;
+      // Antrenman sırasında her makinenin değerleri ayrıdır (switchedValues). Geçmiş düzenlemede makine
+      // değiştirmek yanlış seçilmiş makineyi düzeltmektir: değerler yeni makineye taşınır.
+      if (state.editing) card.equipmentId = target.value;
+      else Object.assign(card, switchedValues(card, card.exerciseId, target.value));
       clearProblems(card);
       renderCard(index);
       requestSave(true);
     } else if (target.name === `option-${index}`) {
-      card.exerciseId = target.value;
-      card.equipmentId = defaultEquipmentId(state.sessions, day.id, card.exerciseId, exerciseOf(card), before);
+      if (state.editing) {
+        card.exerciseId = target.value;
+        card.equipmentId = defaultEquipmentId(state.sessions, day.id, card.exerciseId, exerciseOf(card), before);
+      } else {
+        // Bu antrenmanda o harekete değer girildiyse en son bırakılan makine, girilmediyse varsayılan
+        // makine seçilir.
+        const stashed = card.others.findLast((values) => values.exerciseId === target.value);
+        const machine = stashed?.equipmentId ??
+          defaultEquipmentId(state.sessions, day.id, target.value, state.program.exercises[target.value], before);
+        Object.assign(card, switchedValues(card, target.value, machine));
+      }
       card.machineForm = null;
       clearProblems(card);
       renderCard(index);

@@ -140,7 +140,7 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
               [ (15) ]  [ (13) ]  [ (12) ]
   + Set
   ```
-  - **Makine:** o gün bu harekette en son kullanılan makine seçili gelir. Makine değişince "Geçen sefer", sayaç ve birim etiketi o makineye göre değişir.
+  - **Makine:** o gün bu harekette en son kullanılan makine seçili gelir. Makine değişince "Geçen sefer", sayaç, birim etiketi ve kutular o makineye göre değişir: girdiğiniz değerler eski makinede kalır, bu antrenmanda değer girmediğiniz makinenin kutuları boştur (Aşama 15).
   - **"+ Makine":** ad ve birim girilerek makine eklenir; birim önceden seçili gelmez. Ad kutusu, başka hareketlerde kullandığınız adları önerir.
   - **Kutular:** hareket başına tek ağırlık kutusu ve her set için bir tekrar kutusu vardır. Ağırlıksız makinede ağırlık kutusu yoktur.
   - **Ekleme:** "+ Set" bir satır ekler, sil düğmesi son satırı kaldırır. "+ Hareket ekle" yalnızca bu antrenmana hareket ekler.
@@ -357,6 +357,15 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - Satırı programda olmayan kayıtlar (sonradan silinmiş satır, "+ Hareket ekle" ile eklenen) sonda durur; gün programdan silindiyse yalnızca kayıtlar görünür.
 - Boş kartta seçili gelen makine ve dönüşümlü satırın önerisi, "Geçen sefer" gibi o antrenmandan önceki kayıtlara göredir; sonraki antrenmanlar etkilemez.
 - *Bitti sayılır:* birim testinde sıra ve kaynak (`editLayout`), önceki kayıtlara göre makine ve öneri; uçtan uca testte atlanan satırlar boş ve programdaki sırayla görünüyor, doldurulan satır programdaki hedefiyle kayda giriyor, boş kalanlar kayda girmiyor; aynı günün satırı "+ Hareket ekle" listesinde çıkmıyor.
+
+**Aşama 15: Antrenmanda her makinenin değerleri ayrı** (kullanıcının isteği)
+- Sorun: bir makineye ağırlık ve tekrar girip aynı hareketin başka makinesine geçince aynı sayılar orada da görünüyordu; değerler hangi makineye ait, belli değildi.
+- Antrenman sırasında makine değişince girilen değerler o makinede kalır; diğer makinenin kutuları, bu antrenmanda ona değer girilmediyse boştur. Eski makineye dönünce değerler geri gelir. "+ Makine" ile eklenen makine boş başlar. Dönüşümlü satırda hareket değişince de aynısı olur; harekete dönünce o harekette en son bırakılan makine seçilir.
+- Kayda yalnızca seçili makinedeki değerler girer. Seçili olmayan bir makinede değer kalmışsa "Bitir" (ve başka günden "Bitir ve … başla") antrenmanı bitirmez; kartta hangi makinede değer kaldığı söylenir: kaydedilecek makine seçilir, öbüründeki değerler silinir. Böylece değerler sessizce kaybolmaz.
+- Değerler taslakta kalır: uygulama kapatılıp açılınca da her makinenin değerleri durur. Taslak kartına isteğe bağlı bir alan eklendi (`others`); eski taslaklar ve yedekler olduğu gibi okunur, veritabanı sürümü değişmez.
+- Bir makine silinince bu antrenmanda ona girilen değerler de silinir; onay sorusu bunu söyler.
+- Geçmiş düzenlemede bilerek değişmedi: orada makine değiştirmek yanlış seçilmiş makineyi düzeltmektir, değerler yeni makineye geçer.
+- *Bitti sayılır:* birim testinde makine ve hareket değişimi (`switchedValues`), "Bitir" denetimi ve mesajları, silinmiş makinenin değerinin sayılmaması, yedek denetimi; uçtan uca testte yeni makine boş başlıyor, dönünce değerler geliyor, sayfa yenilense de duruyor, öbür makinede değer varken "Bitir" bitirmiyor, silinince seçili makine kaydediliyor, dönüşümlü satırda ve makine silmede değerler doğru makineyle kalıyor ya da gidiyor.
 
 ## 9. İlk geliştirme görevi: Aşama 1
 Aşama 0 bittikten sonra başlar. Doğrulandıktan sonra durulur ve sonuç size bildirilir.

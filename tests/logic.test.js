@@ -17,6 +17,7 @@ import {
   defaultEquipmentId,
   editLayout,
   equipmentError,
+  equipmentInUse,
   equipmentUseCount,
   e1rm,
   evaluateCards,
@@ -41,6 +42,7 @@ import {
   movedDay,
   movedItem,
   nextDayId,
+  otherValues,
   parseBackup,
   parseTarget,
   parseReps,
@@ -57,6 +59,7 @@ import {
   sessionsByMonth,
   suggestOption,
   suggestionText,
+  switchedValues,
   upgradeProgram,
   usedEquipmentIds,
   validationMessage,
@@ -490,6 +493,14 @@ test('bozuk ya da yabancı yedek reddediliyor', () => {
   };
   assertEqual(broken(withOptions(['rope-pushdown', 'olmayan-hareket'])), draftMismatch);
   assertEqual(broken(withOptions(['cable-fly'])), draftMismatch);
+  // Seçili olmayan makinelerin değerleri (others) kartın değerleriyle aynı biçimdedir ve satırın
+  // hareketlerine bağlıdır.
+  const withOthers = (others) => (backup) => { backup.sessions[1].draft.cards[0].others = others; };
+  const kablo2 = { exerciseId: 'rope-pushdown', equipmentId: 'eq-2', weight: '30', reps: ['10', '', ''] };
+  assertEqual(broken(withOthers(kablo2)), 'Yedek dosyası bozuk: 2. antrenman okunamadı.');
+  assertEqual(broken(withOthers([{ ...kablo2, reps: [10] }])), 'Yedek dosyası bozuk: 2. antrenman okunamadı.');
+  assertEqual(broken(withOthers([{ ...kablo2, equipmentId: null }])), 'Yedek dosyası bozuk: 2. antrenman okunamadı.');
+  assertEqual(broken(withOthers([{ ...kablo2, exerciseId: 'cable-fly' }])), draftMismatch);
   assertEqual(
     broken((backup) => { backup.sessions.push({ ...structuredClone(backup.sessions[1]), id: 'ikinci', dayId: 'legs' }); }),
     'Yedek dosyası bozuk: birden çok devam eden antrenman var.',
@@ -514,6 +525,11 @@ test('uygulamanın ürettiği geçerli yedekler kabul ediliyor', () => {
     extra: true,
   });
   assertEqual(accepted(extra), undefined, '"+ Hareket ekle" kartı');
+  // Makine değiştirilince eski makinede kalan değerler.
+  const others = sampleBackup();
+  others.program.exercises['rope-pushdown'].equipment.push({ id: 'eq-2', name: 'Kablo 2', unit: 'kg' });
+  others.sessions[1].draft.cards[0].others = [{ exerciseId: 'rope-pushdown', equipmentId: 'eq-2', weight: '30', reps: ['10', '', ''] }];
+  assertEqual(accepted(others), undefined, 'öbür makinedeki değerler');
   // Eski sürüm (seedVersion'suz Aşama 1 programı); açılışta yükseltilir.
   const old = buildBackup(
     {
@@ -1131,6 +1147,130 @@ test('"+ Hareket ekle": hedef hareketin programdaki ilk satırından; katalog de
   assertEqual(programTarget(withExercise(program(), 'ex-1', 'Cable Curl'), 'ex-1'), null);
   assertEqual(withExercise(program(), 'ex-1', 'Cable Curl').customized, undefined);
   assertEqual(renamedExercise(program(), 'rope-pushdown', 'Triceps Rope').customized, undefined);
+});
+
+// ---------------------------------------------------------------- Makineye göre değerler
+
+test('makine değişince girilen değerler o makinede kalır; yeni makine boş, geri dönünce değerler gelir', () => {
+  const item = { id: 'push-rope-pushdown', options: ['rope-pushdown'], sets: 3, repMin: 15, repMax: 15 };
+  const card = { item, exerciseId: 'rope-pushdown', equipmentId: 'k1', weight: '40', reps: ['12', '11', '', ''], others: [] };
+  const onK2 = { ...card, ...switchedValues(card, 'rope-pushdown', 'k2') };
+  assertEqual([onK2.equipmentId, onK2.weight, onK2.reps], ['k2', '', ['', '', '']], 'hedefteki set sayısı kadar boş kutu');
+  assertEqual(onK2.others, [{ exerciseId: 'rope-pushdown', equipmentId: 'k1', weight: '40', reps: ['12', '11', '', ''] }]);
+  card.reps[2] = '9';
+  assertEqual(onK2.others[0].reps, ['12', '11', '', ''], 'saklanan değerler kopyadır');
+
+  onK2.weight = '30';
+  onK2.reps[0] = '10';
+  const back = { ...onK2, ...switchedValues(onK2, 'rope-pushdown', 'k1') };
+  assertEqual([back.equipmentId, back.weight, back.reps], ['k1', '40', ['12', '11', '', '']], '"+ Set" ile eklenen set de geri gelir');
+  assertEqual(back.others, [{ exerciseId: 'rope-pushdown', equipmentId: 'k2', weight: '30', reps: ['10', '', ''] }]);
+
+  // Boş bırakılan makinenin değerleri saklanmaz; seçili makine silinince (makine yok) değerleri saklanmaz.
+  const cleared = { ...back, weight: ' ', reps: ['', '', '', ''] };
+  assertEqual(switchedValues(cleared, 'rope-pushdown', 'k2'), {
+    exerciseId: 'rope-pushdown',
+    equipmentId: 'k2',
+    weight: '30',
+    reps: ['10', '', ''],
+    others: [],
+  });
+  assertEqual(switchedValues({ ...card, equipmentId: null }, 'rope-pushdown', 'k3').others, []);
+
+  // Dönüşümlü satırda hareket değişince de değerler hareketiyle ve makinesiyle kalır.
+  const rotation = { id: 'pull-wrist', options: ['wrist-curl', 'reverse-curl'], sets: 2, repMin: 15, repMax: 15 };
+  const wrist = { item: rotation, exerciseId: 'wrist-curl', equipmentId: 'd1', weight: '10', reps: ['15', ''], others: [] };
+  const reverse = { ...wrist, ...switchedValues(wrist, 'reverse-curl', 'b1') };
+  assertEqual([reverse.exerciseId, reverse.equipmentId, reverse.weight, reverse.reps], ['reverse-curl', 'b1', '', ['', '']]);
+  assertEqual(switchedValues(reverse, 'wrist-curl', 'd1'), {
+    exerciseId: 'wrist-curl',
+    equipmentId: 'd1',
+    weight: '10',
+    reps: ['15', ''],
+    others: [],
+  });
+});
+
+test('"Bitir": seçili olmayan makinede değer kaldıysa kart kaydedilmez; boş değer ve silinmiş makine sayılmaz', () => {
+  const exercises = {
+    'rope-pushdown': {
+      name: 'Rope Pushdown',
+      equipment: [
+        { id: 'k1', name: 'Kablo', unit: 'kg' },
+        { id: 'k2', name: 'Kablo 2', unit: 'kg' },
+        { id: 'k3', name: 'Kablo 3', unit: 'kg', archived: true },
+      ],
+    },
+    'wrist-curl': { name: 'Wrist Curl', equipment: [{ id: 'd1', name: 'Dumbbell', unit: 'kg' }] },
+    'reverse-curl': {
+      name: 'Reverse Curl',
+      equipment: [{ id: 'b1', name: 'Bar', unit: 'kg' }, { id: 'b2', name: 'EZ Bar', unit: 'kg' }],
+    },
+  };
+  const values = (equipmentId, weight, reps, exerciseId = 'rope-pushdown') => ({ exerciseId, equipmentId, weight, reps });
+  const card = {
+    item: { id: 'push-rope-pushdown', options: ['rope-pushdown'], sets: 3, repMin: 15, repMax: 15 },
+    exerciseId: 'rope-pushdown',
+    equipmentId: 'k1',
+    weight: '40',
+    reps: ['12', '', ''],
+    others: [values('k2', '30', ['10', '', ''])],
+  };
+  const blocked = evaluateCards([card], exercises);
+  assertEqual([blocked.hasProblems, blocked.entries], [true, []]);
+  assertEqual(blocked.results[0], {
+    problems: [{ field: 'machine', kind: 'other-values' }],
+    message: 'Seçili olmayan makinede de değer var: Kablo 2. Bir harekette yalnızca seçili makine kaydedilir; kaydedeceğiniz makineyi seçin, öbüründeki değerleri silin.',
+  });
+  assertEqual(
+    evaluateCards([{ ...card, weight: '', reps: ['', '', ''] }], exercises).results[0].message,
+    'Değerler seçili olmayan makinede: Kablo 2. Kaydetmek için onu seçin; kaydetmeyecekseniz değerlerini silin.',
+  );
+
+  // Boş değerler, silinmiş makine ve satırda olmayan hareket sayılmaz; seçili makine kaydedilir.
+  const quiet = {
+    ...card,
+    others: [values('k2', ' ', ['', '', '']), values('k3', '20', ['8', '', '']), values('d1', '5', ['5'], 'wrist-curl')],
+  };
+  assertEqual(otherValues(quiet, exercises), []);
+  const saved = evaluateCards([quiet], exercises);
+  assertEqual([saved.hasProblems, saved.entries.map((entry) => [entry.equipmentName, entry.sets.length])], [false, [['Kablo', 1]]]);
+  // "(silinmiş)" olarak seçilebilen makine (keepEquipmentId) sayılır; eski taslak kartında others yoktur.
+  assertEqual(otherValues({ ...quiet, keepEquipmentId: 'k3' }, exercises), [values('k3', '20', ['8', '', ''])]);
+  assertEqual(evaluateCards([{ ...card, others: undefined }], exercises).hasProblems, false);
+
+  // Dönüşümlü satırda öbür hareketin makinesi hareketin adıyla yazılır.
+  const rotation = {
+    item: { id: 'pull-wrist', options: ['wrist-curl', 'reverse-curl'], sets: 2, repMin: 15, repMax: 15 },
+    exerciseId: 'reverse-curl',
+    equipmentId: 'b1',
+    weight: '',
+    reps: ['', ''],
+    others: [values('d1', '10', ['15', ''], 'wrist-curl'), values('b2', '', ['12', ''], 'reverse-curl')],
+  };
+  assertEqual(
+    evaluateCards([rotation], exercises).results[0].message,
+    'Değerler seçili olmayan makinelerde: Wrist Curl · Dumbbell, EZ Bar. Bir harekette yalnızca seçili makine kaydedilir; kaydedeceğiniz makineyi seçin, öbürlerindeki değerleri silin.',
+  );
+});
+
+test('program yükseltmesinde taslakta değer girilmiş öbür makineler de korunur', () => {
+  const active = {
+    ...session({ id: 'devam', date: '2026-09-29T12:00:00.000Z', finished: false }),
+    entries: [],
+    draft: {
+      cards: [{
+        item: { id: 'push-rope-pushdown', options: ['rope-pushdown'], sets: 3, repMin: 15, repMax: 15 },
+        exerciseId: 'rope-pushdown',
+        equipmentId: 'k1',
+        weight: '',
+        reps: ['', '', ''],
+        others: [{ exerciseId: 'rope-pushdown', equipmentId: 'k2', weight: '30', reps: ['10', '', ''] }],
+      }],
+    },
+  };
+  const finished = session({ id: 'bitti', date: '2026-09-22T12:00:00.000Z', equipmentId: 'k0' });
+  assertEqual([...equipmentInUse([finished, active])].sort(), ['k0', 'k1', 'k2']);
 });
 
 // ---------------------------------------------------------------- Sekmeler arasında kaydırma
