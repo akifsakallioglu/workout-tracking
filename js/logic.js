@@ -426,12 +426,11 @@ export function hasProgress(previousSets, currentSets, unit) {
   return false;
 }
 
-// Aynı gün + hareket + makinede son ilerlemeden sonra gelen bitmiş antrenman sayısı. Hiç ilerleme
-// yoksa ilk kayıt başlangıç noktasıdır (sinceFirst). Kayıt yoksa null. Seti girilmemiş (atlanmış)
-// hareket ve bitmemiş antrenman sayılmaz; başka makine ya da gün sayacı etkilemez. before verilirse
-// yalnızca o andan önce başlayan antrenmanlara bakılır (geçmiş bir antrenmanı düzenlerken).
-export function progressCounter(sessions, { dayId, exerciseId, equipmentId }, before = null) {
-  const entries = sessions
+// Aynı gün + hareket + makinedeki kayıtlar, eskiden yeniye ({ startedAt, entry }). Seti girilmemiş
+// (atlanmış) hareket ve bitmemiş antrenman sayılmaz. before verilirse yalnızca o andan önce başlayan
+// antrenmanlara bakılır.
+function keyRecords(sessions, { dayId, exerciseId, equipmentId }, before = null) {
+  return sessions
     .filter((session) => session.finishedAt && session.dayId === dayId && (!before || session.startedAt < before))
     .map((session) => ({
       startedAt: session.startedAt,
@@ -440,14 +439,57 @@ export function progressCounter(sessions, { dayId, exerciseId, equipmentId }, be
       ),
     }))
     .filter(({ entry }) => entry)
-    .sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1))
-    .map(({ entry }) => entry);
-  if (!entries.length) return null;
+    .sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1));
+}
+
+// Kayıtlar arasında son ilerlemenin sırası; hiç ilerleme yoksa 0 (ilk kayıt başlangıç noktasıdır).
+function lastProgressIndex(records) {
   let lastProgress = 0;
-  for (let index = 1; index < entries.length; index++) {
-    if (hasProgress(entries[index - 1].sets, entries[index].sets, entries[index].unit)) lastProgress = index;
+  for (let index = 1; index < records.length; index++) {
+    const [previous, current] = [records[index - 1].entry, records[index].entry];
+    if (hasProgress(previous.sets, current.sets, current.unit)) lastProgress = index;
   }
-  return { count: entries.length - 1 - lastProgress, sinceFirst: lastProgress === 0 };
+  return lastProgress;
+}
+
+// Aynı gün + hareket + makinede son ilerlemeden sonra gelen bitmiş antrenman sayısı. Hiç ilerleme
+// yoksa ilk kayıt başlangıç noktasıdır (sinceFirst). Kayıt yoksa null. Seti girilmemiş (atlanmış)
+// hareket ve bitmemiş antrenman sayılmaz; başka makine ya da gün sayacı etkilemez. before verilirse
+// yalnızca o andan önce başlayan antrenmanlara bakılır (geçmiş bir antrenmanı düzenlerken).
+export function progressCounter(sessions, key, before = null) {
+  const records = keyRecords(sessions, key, before);
+  if (!records.length) return null;
+  const lastProgress = lastProgressIndex(records);
+  return { count: records.length - 1 - lastProgress, sinceFirst: lastProgress === 0 };
+}
+
+// Antrenman başlarken gösterilen, en uzun süredir ilerleme olmayan hareketler. keys: kartların hareketi
+// ve seçili makinesi ({ exerciseId, equipmentId }, ekrandaki sırayla); sayaç o makinenin kayıtlarındandır
+// (progressCounter). count: son ilerlemeden (hiç yoksa ilk kayıttan) sonra ilerlemeden geçen antrenman
+// sayısı; since: o ilerlemenin (ya da ilk kaydın) tarihi. Son antrenmanında ilerlenen, tek kaydı olan,
+// kaydı ya da makinesi olmayan hareket listeye girmez. Sıra: count büyükten küçüğe; eşitse since eskiden
+// yeniye; o da eşitse ekrandaki sıra.
+export function stalledExercises(sessions, dayId, keys, limit = 3) {
+  return keys
+    .flatMap(({ exerciseId, equipmentId }, order) => {
+      if (!equipmentId) return [];
+      const records = keyRecords(sessions, { dayId, exerciseId, equipmentId });
+      const lastProgress = lastProgressIndex(records);
+      const count = records.length - 1 - lastProgress;
+      if (count < 1) return [];
+      return [{ exerciseId, equipmentId, count, sinceFirst: lastProgress === 0, since: records[lastProgress].startedAt, order }];
+    })
+    .sort((a, b) => b.count - a.count || (a.since === b.since ? a.order - b.order : a.since < b.since ? -1 : 1))
+    .slice(0, limit)
+    .map(({ order, ...stalled }) => stalled);
+}
+
+// "En uzun süredir ilerlemediğin hareketler" listesinde hareketin altındaki bilgi. Tarih kısmının
+// boşlukları bölünmez boşluktur: dar ekranda satır "·"dan sonra kırılır, "12 Eyl" ikiye ayrılmaz.
+export function stalledText({ count, sinceFirst, since }) {
+  const streak = count === 1 ? 'Geçen antrenmanda ilerleme yok' : `${count} antrenmandır ilerleme yok`;
+  const when = `${sinceFirst ? 'ilk kayıt' : 'son ilerleme'} ${formatDate(since)}`;
+  return `${streak} · ${when.replaceAll(' ', ' ')}`;
 }
 
 // Kartta "Geçen sefer" satırının altındaki sayaç metni: son ilerlemenin kaç antrenman önce olduğu.

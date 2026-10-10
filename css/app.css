@@ -854,6 +854,42 @@ select[aria-invalid="true"] {
   gap: var(--space-3);
 }
 
+/* Kartların üstünde en uzun süredir ilerlemeyen hareketler: yalnızca bilgi, turuncu yok. Başlık
+   "Sıradaki" gibi küçük üst başlıktır; hareket adı öne çıkar, uzun ad alt satıra geçer. */
+.stalled {
+  margin-bottom: var(--space-3);
+}
+
+.stalled h2 {
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.stalled-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stalled-list li {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.stalled-name {
+  font-weight: 600;
+}
+
+.stalled-list .muted {
+  font-size: var(--font-size-sm);
+}
+
 .options {
   margin-top: var(--space-3);
 }

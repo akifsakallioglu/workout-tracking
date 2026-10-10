@@ -1,6 +1,7 @@
 // Antrenman ekranı: günün bütün hareketleri kartlarla girilir. İlk değer yazılınca antrenman
 // "devam ediyor" olarak kaydedilir ve her değişiklik kendiliğinden kaydedilir; "Bitir" antrenmanı
-// bitirir, "İptal" siler. Seti girilmeyen hareket atlanır ve kayda yazılmaz.
+// bitirir, "İptal" siler. Seti girilmeyen hareket atlanır ve kayda yazılmaz. Kartların üstünde en uzun
+// süredir ilerleme olmayan (en çok üç) hareket görünür.
 // Düzenleme modu (editSessionId): geçmiş bir antrenman aynı kartlarla düzeltilir; otomatik kaydetme
 // yoktur, "Kaydet" ile kaydedilir. O antrenmanda atlanan satırlar da boş kart olarak görünür ve
 // doldurulabilir. "Geçen sefer", sayaç, seçili makine ve dönüşüm önerisi o antrenmandan önceki
@@ -27,6 +28,8 @@ import {
   programTarget,
   restoreError,
   restoredEquipment,
+  stalledExercises,
+  stalledText,
   suggestOption,
   switchedValues,
   usedEquipmentIds,
@@ -193,6 +196,9 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     cards = editLayout(editing, items).map(({ entry, item }) => (entry ? cardFromEntry(entry) : newCard(item)));
   } else if (active?.draft) cards = active.draft.cards.map(cardFromDraft);
   else cards = day.items.map((item) => newCard(item));
+  // Antrenman başlarken en uzun süredir ilerleme olmayan (en çok üç) hareket: kartların hareketi ve
+  // seçili makinesi için kayıtlardan, ekran açılırken bir kez hesaplanır. Geçmiş düzenlemede yok.
+  const stalled = editing ? [] : stalledExercises(sessions, day.id, cards);
 
   const state = {
     program,
@@ -248,6 +254,7 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
         <div id="save-status" class="save-status" role="status"></div>
       </header>
       <p id="workout-message" class="message" role="alert">${escapeHtml(state.message)}</p>
+      ${stalled.length ? stalledHtml() : ''}
       <datalist id="machine-names">${machineNameOptions()}</datalist>
       <div class="cards">
         ${state.cards.map((card, index) => cardHtml(card, index, cardContext())).join('')}
@@ -263,6 +270,21 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
           <button type="button" class="button danger block" data-action="cancel"${disabled}>Antrenmanı iptal et</button>
         </div>`}`;
     renderStatus();
+  }
+
+  // Kartların üstünde: en uzun süredir ilerlemediğin hareketler, en uzun süredir ilerlemeyen önce.
+  function stalledHtml() {
+    return `
+      <section class="card stalled" aria-labelledby="stalled-title">
+        <h2 id="stalled-title">En uzun süredir ilerlemediğin hareketler</h2>
+        <ol class="stalled-list">
+          ${stalled.map((item) => `
+            <li>
+              <span class="stalled-name">${escapeHtml(state.program.exercises[item.exerciseId].name)}</span>
+              <span class="muted">${escapeHtml(stalledText(item))}</span>
+            </li>`).join('')}
+        </ol>
+      </section>`;
   }
 
   // "+ Hareket ekle": katalogdan (bu antrenmanda olmayan) hareket ya da yeni hareket ve hedefi.

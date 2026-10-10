@@ -101,6 +101,7 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
   - Antrenman kartında "Geçen sefer" satırının altında sayaç yazar.
   - Set girerken bir önceki kayda göre artış varsa "Bu antrenmanda ilerledin" görünür.
   - İlerleme ekranında sayaç grafiğin üstünde ayrıca durur.
+  - Antrenman ekranında kartların üstünde, en uzun süredir ilerleme olmayan en çok üç hareket sırayla görünür (Aşama 16).
 
 Örnekler (her biri otomatik teste dönüşür):
 
@@ -128,7 +129,7 @@ session = { id, dayId, dayName, startedAt, finishedAt /* devam ederken null */,
   - "Sıradaki" günü: son bitirilen günden sonraki gün, program sırasına göre (Push → Pull → Legs → Upper → Lower → Push)
   - tüm günler, en son yapıldıkları tarihle
   - son yedek 30 günden eskiyse hatırlatma
-- **Antrenman ekranı:** üstte kayıt durumu ve her hareket için bir kart. Soluk yazılar ipucudur:
+- **Antrenman ekranı:** üstte kayıt durumu, varsa "En uzun süredir ilerlemediğin hareketler" (en çok üç hareket; Aşama 16) ve her hareket için bir kart. Soluk yazılar ipucudur:
   ```
   Rope Pushdown                                    Hedef 3 × 12–15
   Makine:  [ Kablo · kg ]  [● Kablo 2 · kademe ]  [+ Makine]
@@ -366,6 +367,14 @@ Her aşamanın sonunda uygulama çalışır durumdadır. Aşama doğrulanır, co
 - Bir makine silinince bu antrenmanda ona girilen değerler de silinir; onay sorusu bunu söyler.
 - Geçmiş düzenlemede bilerek değişmedi: orada makine değiştirmek yanlış seçilmiş makineyi düzeltmektir, değerler yeni makineye geçer.
 - *Bitti sayılır:* birim testinde makine ve hareket değişimi (`switchedValues`), "Bitir" denetimi ve mesajları, silinmiş makinenin değerinin sayılmaması, yedek denetimi; uçtan uca testte yeni makine boş başlıyor, dönünce değerler geliyor, sayfa yenilense de duruyor, öbür makinede değer varken "Bitir" bitirmiyor, silinince seçili makine kaydediliyor, dönüşümlü satırda ve makine silmede değerler doğru makineyle kalıyor ya da gidiyor.
+
+**Aşama 16: En uzun süredir ilerlemediğin hareketler** (kullanıcının isteği)
+- Amaç: antrenmana başlarken uzun süredir ilerlemediğin hareketleri görüp onlarda daha çok zorlamak. İstek "en son gelişme kaydettiğim üç hareket" diye yazılmıştı; amaç uzun süredir ilerlemeyenleri görmek olduğundan son ilerlemesi en eski olan üç hareket gösterilir.
+- Antrenman ekranında, kartların üstünde "En uzun süredir ilerlemediğin hareketler" kartı: en çok üç hareket, en uzun süredir ilerlemeyen üstte. Her birinin altında "3 antrenmandır ilerleme yok · son ilerleme 12 Eyl" yazar; hiç ilerleme yoksa "ilk kayıt 12 Eyl", bir antrenmansa "Geçen antrenmanda ilerleme yok".
+- Ölçü kartlardaki sayaçla aynıdır: o günün o hareketi ve kartta seçili makinesi için son ilerlemeden (hiç yoksa ilk kayıttan) bu yana ilerlemeden geçen antrenman sayısı. Eşitlikte son ilerlemesi daha eski olan, o da eşitse programda önce gelen üstte durur.
+- Listeye girmeyenler: son antrenmanında ilerlenen, tek kaydı olan, kaydı ya da makinesi olmayan hareket. Hiçbiri yoksa kart görünmez (ör. ilk haftalar).
+- Liste ekran açılırken bir kez hesaplanır: antrenman sırasında, değer girildikçe yer değiştirmez; devam eden antrenmanda da görünür. Geçmiş düzenlemede görünmez. Veritabanına bir şey yazılmaz.
+- *Bitti sayılır:* birim testinde sıra (sayı, tarih, ekrandaki sıra), dışarıda kalanlar (son antrenmanda ilerleme, tek kayıt, makinesiz kart, başka gün ve makine, bitmemiş antrenman) ve bilgi metni; uçtan uca testte kayıtlardan üç hareket doğru sırada ve metinle görünüyor, kartların üstünde duruyor, 320 px'te uzun adla taşmıyor, sayfa yenilenince duruyor, ilerlenen hareket sonraki antrenmanda listeden çıkıyor, kaydı olmayan günde ve geçmiş düzenlemede görünmüyor.
 
 ## 9. İlk geliştirme görevi: Aşama 1
 Aşama 0 bittikten sonra başlar. Doğrulandıktan sonra durulur ve sonuç size bildirilir.

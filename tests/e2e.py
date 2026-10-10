@@ -2435,6 +2435,122 @@ def machine_values_steps(run):
     ]
 
 
+# ---------------------------------------------------------------- En uzun süredir ilerlemeyen hareketler
+
+def stalled_steps(run):
+    # Boşluksuz uzun ad: liste dar ekranda da taşmamalı.
+    long_name = "Omuz_presi_oturarak_notr_tutus_yavas_negatif_uzun_hareket"
+
+    def entry(exercise_id, weight, reps):
+        return {
+            "exerciseId": exercise_id,
+            "equipmentId": f"eq-{exercise_id}",
+            "name": exercise_id,
+            "equipmentName": "Makine",
+            "unit": "kg",
+            "options": [exercise_id],
+            "target": {"sets": 3, "repMin": 12, "repMax": 15},
+            "sets": [{"weight": weight, "reps": reps}],
+        }
+
+    def date_of(page, days_ago):
+        return page.evaluate("async (iso) => (await import('./js/logic.js')).formatDate(iso)", iso_at(days_ago))
+
+    def stalled_names(page):
+        return page.locator(".stalled .stalled-name")
+
+    def stalled_info(page):
+        return page.locator(".stalled li .muted")
+
+    def three_longest_without_progress(page):
+        page.goto(run.base_url + "/")
+        expect(page.get_by_role("heading", level=1)).to_have_text("Antrenman Takibi")
+        program = stored_program(page)
+        for day in program["days"]:
+            if day["id"] == "push":
+                for item in day["items"]:
+                    exercise = program["exercises"][item["options"][0]]
+                    exercise["equipment"].append({"id": f"eq-{item['options'][0]}", "name": "Makine", "unit": "kg"})
+        program["exercises"]["machine-shoulder-press"]["name"] = long_name
+        page.evaluate(PUT_SCRIPT, ["meta", program])
+        # Kaç gün önce → (hareket, ağırlık, tekrar). Rope Pushdown hiç ilerlemedi (3 antrenman); Omuz Pres ve
+        # Overhead Rope Extension 21 gün önce ilerledi (2 antrenman, eşit: programdaki sıra); Cable Fly 14 gün
+        # önce (1 antrenman, dördüncü); Machine Chest Press son antrenmanda ilerledi; Seated Lateral Raise tek kayıt.
+        records = {
+            28: [("machine-shoulder-press", 30, 10), ("rope-pushdown", 40, 12), ("overhead-rope-extension", 25, 10)],
+            21: [("cable-fly", 20, 10), ("machine-shoulder-press", 30, 12), ("rope-pushdown", 40, 12),
+                 ("overhead-rope-extension", 25, 12)],
+            14: [("machine-chest-press", 50, 10), ("cable-fly", 20, 12), ("machine-shoulder-press", 30, 12),
+                 ("rope-pushdown", 40, 12), ("overhead-rope-extension", 25, 12)],
+            7: [("machine-chest-press", 55, 10), ("cable-fly", 20, 12), ("seated-lateral-raise", 10, 12),
+                ("machine-shoulder-press", 30, 12), ("rope-pushdown", 40, 12), ("overhead-rope-extension", 25, 12)],
+        }
+        for days_ago, values in records.items():
+            page.evaluate(PUT_SCRIPT, ["sessions", {
+                "id": f"push-{days_ago}",
+                "dayId": "push",
+                "dayName": "Push",
+                "startedAt": iso_at(days_ago),
+                "finishedAt": iso_at(days_ago, 60),
+                "entries": [entry(*value) for value in values],
+            }])
+        page.reload()
+        open_day(page, "push", "Push")
+        expect(page.locator(".stalled h2")).to_have_text("En uzun süredir ilerlemediğin hareketler")
+        expect(stalled_names(page)).to_have_text(["Rope Pushdown", long_name, "Overhead Rope Extension"])
+        expect(stalled_info(page)).to_have_text([
+            f"3 antrenmandır ilerleme yok · ilk kayıt {date_of(page, 28)}",
+            f"2 antrenmandır ilerleme yok · son ilerleme {date_of(page, 21)}",
+            f"2 antrenmandır ilerleme yok · son ilerleme {date_of(page, 21)}",
+        ])
+        # Liste kartların üstünde; dar ekranda uzun adla da taşmıyor.
+        assert page.evaluate("""() => Boolean(document.querySelector('.stalled')
+          .compareDocumentPosition(document.querySelector('[data-card]')) & Node.DOCUMENT_POSITION_FOLLOWING)""")
+        for width in (320, 390):
+            page.set_viewport_size({"width": width, "height": PHONE["height"]})
+            overflow = page.evaluate(OVERFLOW_SCRIPT)
+            assert overflow["page"] <= 0, f"{width} px: yatay taşma {overflow}"
+            assert page.evaluate(SMALL_TARGETS_SCRIPT) == [], page.evaluate(SMALL_TARGETS_SCRIPT)
+            if width == 320:
+                page.screenshot(path=str(ARTIFACTS / "asama16-ilerlemeyenler-320.png"))
+        page.set_viewport_size(PHONE)
+        page.screenshot(path=str(ARTIFACTS / "asama16-ilerlemeyenler.png"))
+
+    def stays_while_working_then_updates(page):
+        log_sets(card(page, "Rope Pushdown"), "42,5", ["12"])
+        expect(save_status(page)).to_have_text("Kaydedildi ✓")
+        page.reload()  # devam eden antrenmanda da aynı liste
+        expect(page.locator(".topbar h1")).to_have_text("Push")
+        expect(stalled_names(page)).to_have_text(["Rope Pushdown", long_name, "Overhead Rope Extension"])
+        finish(page)
+        expect(page.locator("#flash")).to_have_text("Push antrenmanı kaydedildi ✓")
+        open_day(page, "push", "Push")
+        # Rope Pushdown ilerledi ve listeden çıktı; atlanan hareketlerin sayacı değişmedi, Cable Fly girdi.
+        expect(stalled_names(page)).to_have_text([long_name, "Overhead Rope Extension", "Cable Fly"])
+        expect(stalled_info(page).nth(2)).to_have_text(f"Geçen antrenmanda ilerleme yok · son ilerleme {date_of(page, 14)}")
+
+    def hidden_without_records_and_while_editing(page):
+        go_home(page)
+        open_day(page, "pull", "Pull")
+        expect(page.locator("[data-card]").first).to_be_visible()
+        expect(page.locator(".stalled")).to_have_count(0)
+        go_home(page)
+        page.get_by_role("link", name="Geçmiş").click()
+        history_rows(page).first.click()
+        page.get_by_role("link", name="Düzenle").click()
+        expect(page.locator(".topbar h1")).to_contain_text("Push · ")
+        expect(page.locator("[data-card]").first).to_be_visible()
+        expect(page.locator(".stalled")).to_have_count(0)
+
+    return [
+        ("Antrenman başında en uzun süredir ilerlemeyen üç hareket sırasıyla; tek kayıt ve son ilerleme listede yok",
+         three_longest_without_progress),
+        ("Değer girilince ve sayfa yenilenince liste duruyor; ilerlenen hareket sonraki antrenmanda çıkıyor",
+         stays_while_working_then_updates),
+        ("Kaydı olmayan günde ve geçmiş düzenlemede liste yok", hidden_without_records_and_while_editing),
+    ]
+
+
 # ---------------------------------------------------------------- İnternetsiz çalışma ve güncelleme
 
 WAIT_FOR_CONTROLLER = "navigator.serviceWorker.controller !== null"
@@ -3391,6 +3507,7 @@ def main():
             run.flow("Program düzenleyici", program_editor_steps(run))
             run.flow("Makine yönetimi ve hareket ekleme", machine_management_steps(run))
             run.flow("Makineye göre değerler", machine_values_steps(run))
+            run.flow("En uzun süredir ilerlemeyen hareketler", stalled_steps(run))
             run.flow("İnternetsiz çalışma", offline_steps(run))
             run.flow("Yeni sürüm ve güncelleme", update_steps(copy_url, app_copy), init_script=FAIL_WRITES_SCRIPT)
             run.flow("Günler ayrı, makineler harekete ait", day_separation_steps(run))

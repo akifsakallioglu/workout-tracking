@@ -57,6 +57,8 @@ import {
   restoredEquipment,
   sessionSummary,
   sessionsByMonth,
+  stalledExercises,
+  stalledText,
   suggestOption,
   suggestionText,
   switchedValues,
@@ -1271,6 +1273,53 @@ test('program yükseltmesinde taslakta değer girilmiş öbür makineler de koru
   };
   const finished = session({ id: 'bitti', date: '2026-09-22T12:00:00.000Z', equipmentId: 'k0' });
   assertEqual([...equipmentInUse([finished, active])].sort(), ['k0', 'k1', 'k2']);
+});
+
+// ---------------------------------------------------------------- En uzun süredir ilerlemeyen hareketler
+
+test('en uzun süredir ilerlemeyen üç hareket: önce ilerlemesiz antrenman sayısı, sonra tarih, sonra ekrandaki sıra', () => {
+  const day = (number) => `2026-09-${String(number).padStart(2, '0')}T12:00:00.000Z`;
+  // Her hareketin Push kayıtları ([gün, setler]); makinesi m-<hareket>.
+  const history = {
+    a: [[1, '40×12'], [8, '40×12'], [15, '40×12'], [22, '40×12']], // hiç ilerleme yok: 3 antrenman, ilk kayıt 1 Eyl
+    b: [[1, '30×10'], [8, '30×12'], [15, '30×12'], [22, '30×12']], // 8 Eyl'de ilerleme, sonra 2 antrenman
+    c: [[1, '20×10'], [8, '20×10'], [15, '20×10']], // hiç ilerleme yok: 2 antrenman, ilk kayıt 1 Eyl
+    d: [[15, '50×10'], [22, '55×10']], // son antrenmanında ilerledi
+    e: [[22, '10×12']], // tek kayıt
+    g: [[8, '60×8'], [15, '60×10'], [22, '60×10']], // 15 Eyl'de ilerleme, sonra 1 antrenman
+    h: [[1, '15×10'], [8, '15×12'], [15, '15×12'], [22, '15×12']], // b ile aynı: ekrandaki sıra belirler
+  };
+  const sessions = Object.entries(history).flatMap(([exerciseId, records]) =>
+    records.map(([number, text]) =>
+      session({ id: `${exerciseId}-${number}`, date: day(number), exerciseId, equipmentId: `m-${exerciseId}`, sets: sets(text) })));
+  // Başka gün, başka makine ve bitmemiş antrenman sayılmaz.
+  sessions.push(
+    session({ id: 'pull', date: day(29), dayId: 'pull', exerciseId: 'a', equipmentId: 'm-a', sets: sets('90×20') }),
+    session({ id: 'baska-makine', date: day(29), exerciseId: 'b', equipmentId: 'm-x', sets: sets('90×20') }),
+    session({ id: 'devam', date: day(29), exerciseId: 'g', equipmentId: 'm-g', sets: sets('60×10'), finished: false }),
+  );
+  // Kartların sırası; makinesi olmayan kart (f) atlanır.
+  const keys = [...['h', 'g', 'b', 'e', 'd', 'c', 'a'].map((id) => ({ exerciseId: id, equipmentId: `m-${id}` })), { exerciseId: 'f', equipmentId: null }];
+  const ids = (list) => list.map(({ exerciseId }) => exerciseId);
+  assertEqual(ids(stalledExercises(sessions, 'push', keys)), ['a', 'c', 'h']);
+  assertEqual(ids(stalledExercises(sessions, 'push', keys, 10)), ['a', 'c', 'h', 'b', 'g']);
+  const [first, second] = stalledExercises(sessions, 'push', keys);
+  assertEqual(first, { exerciseId: 'a', equipmentId: 'm-a', count: 3, sinceFirst: true, since: day(1) });
+  assertEqual(second, { exerciseId: 'c', equipmentId: 'm-c', count: 2, sinceFirst: true, since: day(1) });
+  assertEqual(stalledExercises(sessions, 'push', keys, 10)[3], { exerciseId: 'b', equipmentId: 'm-b', count: 2, sinceFirst: false, since: day(8) });
+  assertEqual(stalledExercises(sessions, 'pull', keys), [], 'tek kayıt');
+  assertEqual(stalledExercises([], 'push', keys), []);
+});
+
+test('en uzun süredir ilerlemeyen hareketin bilgisi: ilerlemesiz antrenman sayısı ve son ilerleme ya da ilk kayıt', () => {
+  const at = (date) => `${new Date().getFullYear()}-${date}T12:00:00.000Z`;
+  const together = (text) => text.replaceAll(' ', ' '); // tarih kısmı dar ekranda bölünmez
+  assertEqual(stalledText({ count: 3, sinceFirst: true, since: at('09-01') }), `3 antrenmandır ilerleme yok · ${together('ilk kayıt 1 Eyl')}`);
+  assertEqual(stalledText({ count: 2, sinceFirst: false, since: at('09-08') }), `2 antrenmandır ilerleme yok · ${together('son ilerleme 8 Eyl')}`);
+  assertEqual(
+    stalledText({ count: 1, sinceFirst: false, since: at('09-15') }),
+    `Geçen antrenmanda ilerleme yok · ${together('son ilerleme 15 Eyl')}`,
+  );
 });
 
 // ---------------------------------------------------------------- Sekmeler arasında kaydırma
