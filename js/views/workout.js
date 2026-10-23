@@ -1,7 +1,7 @@
 // Antrenman ekranı: günün bütün hareketleri kartlarla girilir. İlk değer yazılınca antrenman
 // "devam ediyor" olarak kaydedilir ve her değişiklik kendiliğinden kaydedilir; "Bitir" antrenmanı
 // bitirir, "İptal" siler. Seti girilmeyen hareket atlanır ve kayda yazılmaz. Kartların üstünde en uzun
-// süredir ilerleme olmayan (en çok üç) hareket görünür.
+// süredir ilerleme olmayan (en çok üç) hareket, makinesiyle görünür.
 // Düzenleme modu (editSessionId): geçmiş bir antrenman aynı kartlarla düzeltilir; otomatik kaydetme
 // yoktur, "Kaydet" ile kaydedilir. O antrenmanda atlanan satırlar da boş kart olarak görünür ve
 // doldurulabilir. "Geçen sefer", sayaç, seçili makine ve dönüşüm önerisi o antrenmandan önceki
@@ -196,9 +196,13 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     cards = editLayout(editing, items).map(({ entry, item }) => (entry ? cardFromEntry(entry) : newCard(item)));
   } else if (active?.draft) cards = active.draft.cards.map(cardFromDraft);
   else cards = day.items.map((item) => newCard(item));
-  // Antrenman başlarken en uzun süredir ilerleme olmayan (en çok üç) hareket: kartların hareketi ve
-  // seçili makinesi için kayıtlardan, ekran açılırken bir kez hesaplanır. Geçmiş düzenlemede yok.
-  const stalled = editing ? [] : stalledExercises(sessions, day.id, cards);
+  // Antrenman başlarken en uzun süredir ilerleme olmayan (en çok üç) hareket ve makine: kartların
+  // hareketlerinin kartta seçilebilen her makinesi ayrı sayılır (sayaçları ayrıdır). Kayıtlardan, ekran
+  // açılırken bir kez hesaplanır. Geçmiş düzenlemede yok.
+  const stalled = editing ? [] : stalledExercises(sessions, day.id, cards.flatMap((card) =>
+    program.exercises[card.exerciseId].equipment
+      .filter((equipment) => !equipment.archived || equipment.id === card.keepEquipmentId)
+      .map((equipment) => ({ exerciseId: card.exerciseId, equipmentId: equipment.id }))));
 
   const state = {
     program,
@@ -272,15 +276,21 @@ export async function renderWorkout(container, { dayId, navigate, editSessionId 
     renderStatus();
   }
 
-  // Kartların üstünde: en uzun süredir ilerlemediğin hareketler, en uzun süredir ilerlemeyen önce.
+  // Kartların üstünde: en uzun süredir ilerlemediğin hareketler, makineleriyle ("Rope Pushdown · Kablo");
+  // en uzun süredir ilerlemeyen önce. Adlar güncel programdan gelir.
   function stalledHtml() {
+    const title = ({ exerciseId, equipmentId }) => {
+      const exercise = state.program.exercises[exerciseId];
+      const equipment = exercise.equipment.find((option) => option.id === equipmentId);
+      return `${exercise.name} · ${equipment.name}${equipment.archived ? ' (silinmiş)' : ''}`;
+    };
     return `
       <section class="card stalled" aria-labelledby="stalled-title">
         <h2 id="stalled-title">En uzun süredir ilerlemediğin hareketler</h2>
         <ol class="stalled-list">
           ${stalled.map((item) => `
             <li>
-              <span class="stalled-name">${escapeHtml(state.program.exercises[item.exerciseId].name)}</span>
+              <span class="stalled-name">${escapeHtml(title(item))}</span>
               <span class="muted">${escapeHtml(stalledText(item))}</span>
             </li>`).join('')}
         </ol>

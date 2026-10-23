@@ -1277,49 +1277,55 @@ test('program yükseltmesinde taslakta değer girilmiş öbür makineler de koru
 
 // ---------------------------------------------------------------- En uzun süredir ilerlemeyen hareketler
 
-test('en uzun süredir ilerlemeyen üç hareket: önce ilerlemesiz antrenman sayısı, sonra tarih, sonra ekrandaki sıra', () => {
+test('en uzun süredir ilerlemeyen üç hareket ve makine: sayaçla aynı hesap; önce sayı, sonra tarih, sonra ekrandaki sıra', () => {
   const day = (number) => `2026-09-${String(number).padStart(2, '0')}T12:00:00.000Z`;
-  // Her hareketin Push kayıtları ([gün, setler]); makinesi m-<hareket>.
-  const history = {
-    a: [[1, '40×12'], [8, '40×12'], [15, '40×12'], [22, '40×12']], // hiç ilerleme yok: 3 antrenman, ilk kayıt 1 Eyl
-    b: [[1, '30×10'], [8, '30×12'], [15, '30×12'], [22, '30×12']], // 8 Eyl'de ilerleme, sonra 2 antrenman
-    c: [[1, '20×10'], [8, '20×10'], [15, '20×10']], // hiç ilerleme yok: 2 antrenman, ilk kayıt 1 Eyl
-    d: [[15, '50×10'], [22, '55×10']], // son antrenmanında ilerledi
-    e: [[22, '10×12']], // tek kayıt
-    g: [[8, '60×8'], [15, '60×10'], [22, '60×10']], // 15 Eyl'de ilerleme, sonra 1 antrenman
-    h: [[1, '15×10'], [8, '15×12'], [15, '15×12'], [22, '15×12']], // b ile aynı: ekrandaki sıra belirler
-  };
-  const sessions = Object.entries(history).flatMap(([exerciseId, records]) =>
+  // Push kayıtları: [hareket, makine, [gün, setler]...]. Bir hareketin her makinesi ayrı sayılır.
+  const history = [
+    ['a', 'm-a', [1, '40×12'], [8, '40×12'], [15, '40×12'], [22, '40×12']], // hiç ilerleme yok: 3 antrenman, ilk kayıt 1 Eyl
+    ['a', 'm-a2', [3, '35×10'], [10, '35×10']], // aynı hareketin öbür makinesi: 1 antrenman, ilk kayıt 3 Eyl
+    ['b', 'm-b', [1, '30×10'], [8, '30×12'], [15, '30×12'], [22, '30×12']], // 8 Eyl'de ilerleme, sonra 2 antrenman
+    ['b', 'm-x', [29, '90×20']], // tek kayıt; m-b'nin sayacını etkilemez
+    ['c', 'm-c', [1, '20×10'], [8, '20×10'], [15, '20×10']], // hiç ilerleme yok: 2 antrenman, ilk kayıt 1 Eyl
+    ['d', 'm-d', [15, '50×10'], [22, '55×10']], // son antrenmanında ilerledi
+    ['e', 'm-e', [22, '10×12']], // tek kayıt
+    ['g', 'm-g', [8, '60×8'], [15, '60×10'], [22, '60×10']], // 15 Eyl'de ilerleme, sonra 1 antrenman
+    ['h', 'm-h', [1, '15×10'], [8, '15×12'], [15, '15×12'], [22, '15×12']], // b ile aynı: ekrandaki sıra belirler
+  ];
+  const sessions = history.flatMap(([exerciseId, equipmentId, ...records]) =>
     records.map(([number, text]) =>
-      session({ id: `${exerciseId}-${number}`, date: day(number), exerciseId, equipmentId: `m-${exerciseId}`, sets: sets(text) })));
-  // Başka gün, başka makine ve bitmemiş antrenman sayılmaz.
+      session({ id: `${equipmentId}-${number}`, date: day(number), exerciseId, equipmentId, sets: sets(text) })));
+  // Başka gün ve bitmemiş antrenman sayılmaz.
   sessions.push(
     session({ id: 'pull', date: day(29), dayId: 'pull', exerciseId: 'a', equipmentId: 'm-a', sets: sets('90×20') }),
-    session({ id: 'baska-makine', date: day(29), exerciseId: 'b', equipmentId: 'm-x', sets: sets('90×20') }),
     session({ id: 'devam', date: day(29), exerciseId: 'g', equipmentId: 'm-g', sets: sets('60×10'), finished: false }),
   );
-  // Kartların sırası; makinesi olmayan kart (f) atlanır.
-  const keys = [...['h', 'g', 'b', 'e', 'd', 'c', 'a'].map((id) => ({ exerciseId: id, equipmentId: `m-${id}` })), { exerciseId: 'f', equipmentId: null }];
-  const ids = (list) => list.map(({ exerciseId }) => exerciseId);
-  assertEqual(ids(stalledExercises(sessions, 'push', keys)), ['a', 'c', 'h']);
-  assertEqual(ids(stalledExercises(sessions, 'push', keys, 10)), ['a', 'c', 'h', 'b', 'g']);
-  const [first, second] = stalledExercises(sessions, 'push', keys);
-  assertEqual(first, { exerciseId: 'a', equipmentId: 'm-a', count: 3, sinceFirst: true, since: day(1) });
-  assertEqual(second, { exerciseId: 'c', equipmentId: 'm-c', count: 2, sinceFirst: true, since: day(1) });
-  assertEqual(stalledExercises(sessions, 'push', keys, 10)[3], { exerciseId: 'b', equipmentId: 'm-b', count: 2, sinceFirst: false, since: day(8) });
+  // Kartların sırasıyla hareketlerin makineleri.
+  const keys = [['h', 'm-h'], ['g', 'm-g'], ['b', 'm-b'], ['b', 'm-x'], ['e', 'm-e'], ['d', 'm-d'], ['c', 'm-c'], ['a', 'm-a'], ['a', 'm-a2']]
+    .map(([exerciseId, equipmentId]) => ({ exerciseId, equipmentId }));
+  const ids = (list) => list.map(({ exerciseId, equipmentId }) => `${exerciseId}/${equipmentId}`);
+  assertEqual(ids(stalledExercises(sessions, 'push', keys)), ['a/m-a', 'c/m-c', 'h/m-h']);
+  const all = stalledExercises(sessions, 'push', keys, 10);
+  assertEqual(ids(all), ['a/m-a', 'c/m-c', 'h/m-h', 'b/m-b', 'a/m-a2', 'g/m-g']);
+  assertEqual(all[0], { exerciseId: 'a', equipmentId: 'm-a', count: 3, sinceFirst: true, since: day(1) });
+  assertEqual(all[3], { exerciseId: 'b', equipmentId: 'm-b', count: 2, sinceFirst: false, since: day(8) });
+  assertEqual(all[4], { exerciseId: 'a', equipmentId: 'm-a2', count: 1, sinceFirst: true, since: day(3) });
+  // Sayı ve "hiç ilerleme yok" bilgisi, makinenin kartındaki sayaçla aynıdır.
+  for (const { exerciseId, equipmentId, count, sinceFirst } of all) {
+    assertEqual({ count, sinceFirst }, progressCounter(sessions, { dayId: 'push', exerciseId, equipmentId }), `${exerciseId}/${equipmentId}`);
+  }
   assertEqual(stalledExercises(sessions, 'pull', keys), [], 'tek kayıt');
   assertEqual(stalledExercises([], 'push', keys), []);
 });
 
-test('en uzun süredir ilerlemeyen hareketin bilgisi: ilerlemesiz antrenman sayısı ve son ilerleme ya da ilk kayıt', () => {
+test('en uzun süredir ilerlemeyenlerin bilgisi: kartın sayacıyla aynı metin ve son ilerlemenin ya da ilk kaydın tarihi', () => {
   const at = (date) => `${new Date().getFullYear()}-${date}T12:00:00.000Z`;
-  const together = (text) => text.replaceAll(' ', ' '); // tarih kısmı dar ekranda bölünmez
-  assertEqual(stalledText({ count: 3, sinceFirst: true, since: at('09-01') }), `3 antrenmandır ilerleme yok · ${together('ilk kayıt 1 Eyl')}`);
-  assertEqual(stalledText({ count: 2, sinceFirst: false, since: at('09-08') }), `2 antrenmandır ilerleme yok · ${together('son ilerleme 8 Eyl')}`);
-  assertEqual(
-    stalledText({ count: 1, sinceFirst: false, since: at('09-15') }),
-    `Geçen antrenmanda ilerleme yok · ${together('son ilerleme 15 Eyl')}`,
-  );
+  const together = (text) => text.replaceAll(' ', '\u00a0'); // tarih kısmı dar ekranda bölünmez
+  assertEqual(stalledText({ count: 3, sinceFirst: false, since: at('09-08') }), `Son ilerleme 4 antrenman önce · ${together('8 Eyl')}`);
+  assertEqual(stalledText({ count: 1, sinceFirst: false, since: at('09-15') }), `Son ilerleme 2 antrenman önce · ${together('15 Eyl')}`);
+  assertEqual(stalledText({ count: 2, sinceFirst: true, since: at('09-01') }), `Henüz ilerleme yok · ${together('ilk kayıt 1 Eyl')}`);
+  for (const counter of [{ count: 3, sinceFirst: false }, { count: 2, sinceFirst: true }]) {
+    assert(stalledText({ ...counter, since: at('09-01') }).startsWith(`${counterText(counter)} · `), 'kartın sayacıyla aynı metin');
+  }
 });
 
 // ---------------------------------------------------------------- Sekmeler arasında kaydırma

@@ -463,16 +463,15 @@ export function progressCounter(sessions, key, before = null) {
   return { count: records.length - 1 - lastProgress, sinceFirst: lastProgress === 0 };
 }
 
-// Antrenman başlarken gösterilen, en uzun süredir ilerleme olmayan hareketler. keys: kartların hareketi
-// ve seçili makinesi ({ exerciseId, equipmentId }, ekrandaki sırayla); sayaç o makinenin kayıtlarındandır
-// (progressCounter). count: son ilerlemeden (hiç yoksa ilk kayıttan) sonra ilerlemeden geçen antrenman
-// sayısı; since: o ilerlemenin (ya da ilk kaydın) tarihi. Son antrenmanında ilerlenen, tek kaydı olan,
-// kaydı ya da makinesi olmayan hareket listeye girmez. Sıra: count büyükten küçüğe; eşitse since eskiden
-// yeniye; o da eşitse ekrandaki sıra.
+// Antrenman başlarken gösterilen, en uzun süredir ilerleme olmayan hareket ve makineler. keys: kartların
+// hareketleri ve makineleri ({ exerciseId, equipmentId }, ekrandaki sırayla; bir hareketin her makinesi
+// ayrıdır). count ve sinceFirst makinenin sayacıyla aynıdır (progressCounter): son ilerlemeden (hiç yoksa
+// ilk kayıttan) sonra ilerlemeden geçen antrenman sayısı. since: o ilerlemenin (ya da ilk kaydın) tarihi.
+// Son antrenmanında ilerlenen, tek kaydı olan ya da kaydı olmayan makine listeye girmez. Sıra: count
+// büyükten küçüğe; eşitse since eskiden yeniye; o da eşitse ekrandaki sıra.
 export function stalledExercises(sessions, dayId, keys, limit = 3) {
   return keys
     .flatMap(({ exerciseId, equipmentId }, order) => {
-      if (!equipmentId) return [];
       const records = keyRecords(sessions, { dayId, exerciseId, equipmentId });
       const lastProgress = lastProgressIndex(records);
       const count = records.length - 1 - lastProgress;
@@ -484,12 +483,13 @@ export function stalledExercises(sessions, dayId, keys, limit = 3) {
     .map(({ order, ...stalled }) => stalled);
 }
 
-// "En uzun süredir ilerlemediğin hareketler" listesinde hareketin altındaki bilgi. Tarih kısmının
-// boşlukları bölünmez boşluktur: dar ekranda satır "·"dan sonra kırılır, "12 Eyl" ikiye ayrılmaz.
+// "En uzun süredir ilerlemediğin hareketler" listesinde hareket ve makinenin altındaki bilgi: kartın
+// sayacıyla aynı metin ("Son ilerleme 4 antrenman önce"; hiç ilerleme yoksa "Henüz ilerleme yok") ve son
+// ilerlemenin tarihi (yoksa "ilk kayıt" ve tarihi). Tarih kısmının boşlukları bölünmez boşluktur: dar
+// ekranda satır "·"dan sonra kırılır, "12 Eyl" ikiye ayrılmaz.
 export function stalledText({ count, sinceFirst, since }) {
-  const streak = count === 1 ? 'Geçen antrenmanda ilerleme yok' : `${count} antrenmandır ilerleme yok`;
-  const when = `${sinceFirst ? 'ilk kayıt' : 'son ilerleme'} ${formatDate(since)}`;
-  return `${streak} · ${when.replaceAll(' ', ' ')}`;
+  const when = `${sinceFirst ? 'ilk kayıt ' : ''}${formatDate(since)}`;
+  return `${counterText({ count, sinceFirst })} · ${when.replaceAll(' ', '\u00a0')}`;
 }
 
 // Kartta "Geçen sefer" satırının altındaki sayaç metni: son ilerlemenin kaç antrenman önce olduğu.
